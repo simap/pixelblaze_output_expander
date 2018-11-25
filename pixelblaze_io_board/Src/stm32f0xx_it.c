@@ -37,7 +37,7 @@
 /* USER CODE BEGIN 0 */
 
 extern volatile unsigned long ms;
-
+extern volatile uint8_t drawingBusy;
 
 /* USER CODE END 0 */
 
@@ -127,28 +127,15 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
-* @brief This function handles DMA1 channel 1 interrupt.
-*/
-void DMA1_Channel1_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA1_Channel1_IRQn 0 */
-
-  /* USER CODE END DMA1_Channel1_IRQn 0 */
-  
-  /* USER CODE BEGIN DMA1_Channel1_IRQn 1 */
-
-  /* USER CODE END DMA1_Channel1_IRQn 1 */
-}
-
-/**
 * @brief This function handles DMA1 channel 2 and 3 interrupts.
 */
 void DMA1_Channel2_3_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Channel2_3_IRQn 0 */
 
-	if (DMA1->ISR & DMA_ISR_TCIF2) {
-		DMA1->IFCR |= DMA_ISR_TCIF2;
+	if (DMA1->ISR & DMA_ISR_TCIF3) {
+		DMA1->IFCR |= DMA_ISR_TCIF3;
+		drawingBusy = 0;
 	} else {
 		HardFault_Handler();
 	}
@@ -182,16 +169,16 @@ void DMA1_Channel4_5_IRQHandler(void)
 }
 
 /**
-* @brief This function handles TIM1 break, update, trigger and commutation interrupts.
+* @brief This function handles USART1 global interrupt / USART1 wake-up interrupt through EXTI line 25.
 */
-void TIM1_BRK_UP_TRG_COM_IRQHandler(void)
+void USART1_IRQHandler(void)
 {
-  /* USER CODE BEGIN TIM1_BRK_UP_TRG_COM_IRQn 0 */
-	TIM1->SR &= ~TIM_SR_UIF;
-  /* USER CODE END TIM1_BRK_UP_TRG_COM_IRQn 0 */
-  /* USER CODE BEGIN TIM1_BRK_UP_TRG_COM_IRQn 1 */
+  /* USER CODE BEGIN USART1_IRQn 0 */
 
-  /* USER CODE END TIM1_BRK_UP_TRG_COM_IRQn 1 */
+  /* USER CODE END USART1_IRQn 0 */
+  /* USER CODE BEGIN USART1_IRQn 1 */
+
+  /* USER CODE END USART1_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

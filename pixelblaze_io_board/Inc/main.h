@@ -42,6 +42,7 @@
 #define __MAIN_H__
 
 /* Includes ------------------------------------------------------------------*/
+#include "stm32f0xx_ll_crc.h"
 #include "stm32f0xx_ll_dma.h"
 #include "stm32f0xx_ll_crs.h"
 #include "stm32f0xx_ll_rcc.h"
