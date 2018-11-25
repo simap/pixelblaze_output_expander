@@ -31,6 +31,7 @@ void bitConverter(uint32_t *dst, uint8_t dstBit, uint8_t *data, int size);
 }
 #endif
 
+void uartIsr();
 void uartResetCrc();
 uint32_t uartGetCrc();
 void uartSetup();

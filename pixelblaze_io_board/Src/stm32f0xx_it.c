@@ -39,6 +39,8 @@
 extern volatile unsigned long ms;
 extern volatile uint8_t drawingBusy;
 
+extern void uartIsr();
+
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -174,6 +176,7 @@ void DMA1_Channel4_5_IRQHandler(void)
 void USART1_IRQHandler(void)
 {
   /* USER CODE BEGIN USART1_IRQn 0 */
+	uartIsr();
 
   /* USER CODE END USART1_IRQn 0 */
   /* USER CODE BEGIN USART1_IRQn 1 */

@@ -68,10 +68,14 @@ uint8_t getBusId() {
 	return busId;
 }
 
+unsigned long drawCount = 0;
+
 void startDrawingChannles() {
 	if (drawingBusy) {
 		return;
 	}
+
+	drawCount++;
 	drawingBusy = 1;
 	LL_TIM_DisableCounter(TIM1);
 	TIM1->CNT = 0;
