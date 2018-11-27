@@ -56,6 +56,9 @@ const uint8_t ones = 0xff;
 uint8_t startBits = 0;
 
 volatile uint8_t drawingBusy;
+volatile uint32_t crcErrors;
+volatile uint32_t frameMisses;
+volatile uint32_t drawCount;
 
 uint8_t getBusId() {
 	uint8_t busId = 0;
@@ -68,13 +71,11 @@ uint8_t getBusId() {
 	return busId;
 }
 
-unsigned long drawCount = 0;
 
 void startDrawingChannles() {
 	if (drawingBusy) {
 		return;
 	}
-
 	drawCount++;
 	drawingBusy = 1;
 	LL_TIM_DisableCounter(TIM1);
@@ -130,12 +131,15 @@ void setup() {
 
 	LL_TIM_EnableCounter(TIM1);
 
+	LL_TIM_EnableIT_UPDATE(TIM14);
+	LL_TIM_EnableCounter(TIM14);
+
 }
 
 void handleIncomming() {
 	uartResetCrc();
 	if (uartGetc() == 'U' && uartGetc() == 'P' && uartGetc() == 'X' && uartGetc() == 'L') {
-		unsigned long timer = ms;
+		volatile uint32_t timer = micros();
 		uint8_t channel = uartGetc();
 		uint8_t recordType = uartGetc();
 		switch (recordType) {
@@ -190,6 +194,7 @@ void handleIncomming() {
 					channels[channel] = ch;
 					zeroStart = ch.numElements * ch.pixels * 2;
 				} else {
+					crcErrors++;
 					channels[channel].numElements = 0; //garbage, disable the channel, zero everything
 				}
 
@@ -198,7 +203,7 @@ void handleIncomming() {
 				if (blocksToZero > 0)
 					bitSetZeros(bitBuffer + zeroStart, channel, blocksToZero);
 			}
-			volatile unsigned long duration = ms - timer;
+			volatile int32_t duration = micros() - timer;
 			ms += 0;
 			break;
 		}
@@ -208,14 +213,21 @@ void handleIncomming() {
 			uint32_t crcRead;
 			uartRead(&crcRead, sizeof(crcRead));
 			if (crcExpected == crcRead) {
-				startDrawingChannles();
+//				startDrawingChannles();
+			} else {
+				crcErrors++;
 			}
+			volatile long duration = microsFast() - timer;
+			ms += 0;
 			break;
 		}
 		default:
 			break;
 			//error
 		}
+
+	} else {
+		frameMisses++;
 	}
 }
 

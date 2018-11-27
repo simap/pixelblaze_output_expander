@@ -60,6 +60,7 @@ static void MX_USART1_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_CRC_Init(void);
+static void MX_TIM14_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -105,6 +106,7 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_CRC_Init();
+  MX_TIM14_Init();
   /* USER CODE BEGIN 2 */
 
   setup();
@@ -364,6 +366,29 @@ static void MX_TIM2_Init(void)
   LL_TIM_SetTriggerOutput(TIM2, LL_TIM_TRGO_OC1REF);
 
   LL_TIM_EnableMasterSlaveMode(TIM2);
+
+}
+
+/* TIM14 init function */
+static void MX_TIM14_Init(void)
+{
+
+  LL_TIM_InitTypeDef TIM_InitStruct;
+
+  /* Peripheral clock enable */
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM14);
+
+  /* TIM14 interrupt Init */
+  NVIC_SetPriority(TIM14_IRQn, 0);
+  NVIC_EnableIRQ(TIM14_IRQn);
+
+  TIM_InitStruct.Prescaler = 47;
+  TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_UP;
+  TIM_InitStruct.Autoreload = 65535;
+  TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
+  LL_TIM_Init(TIM14, &TIM_InitStruct);
+
+  LL_TIM_DisableARRPreload(TIM14);
 
 }
 

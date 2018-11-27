@@ -38,8 +38,9 @@
 
 extern volatile unsigned long ms;
 extern volatile uint8_t drawingBusy;
-
+extern volatile uint32_t microsOverflow;
 extern void uartIsr();
+
 
 /* USER CODE END 0 */
 
@@ -168,6 +169,20 @@ void DMA1_Channel4_5_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Channel4_5_IRQn 1 */
 
   /* USER CODE END DMA1_Channel4_5_IRQn 1 */
+}
+
+/**
+* @brief This function handles TIM14 global interrupt.
+*/
+void TIM14_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM14_IRQn 0 */
+	microsOverflow++;
+	CLEAR_BIT(TIM14->SR, TIM_SR_UIF);
+  /* USER CODE END TIM14_IRQn 0 */
+  /* USER CODE BEGIN TIM14_IRQn 1 */
+
+  /* USER CODE END TIM14_IRQn 1 */
 }
 
 /**

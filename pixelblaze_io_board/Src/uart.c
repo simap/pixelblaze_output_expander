@@ -47,10 +47,11 @@ void uartSetup() {
 	//listen for errors via interrupt
 	SET_BIT(USART1->CR3, USART_CR3_EIE);
 
-	uartStartBaudRateDetection();
+//	uartStartBaudRateDetection();
 }
 
 void uartIsr() {
+	/*
 	//when rx times out, restart auto baud rate detection (and stop looking for timeouts)
 	if (USART1->ISR & USART_ISR_RTOF) {
 		USART1->ICR |= USART_ICR_RTOCF;
@@ -67,7 +68,7 @@ void uartIsr() {
 		}
 		uartStartTimeoutDetection();
 	}
-
+*/
 	//check all the uart error conditions and clear it
 	if (USART1->ISR & (USART_ISR_FE | USART_ISR_ORE | USART_ISR_NE)) {
 		USART1->ICR |= USART_ICR_FECF |USART_ICR_ORECF | USART_ICR_NCF;
@@ -75,10 +76,6 @@ void uartIsr() {
 	}
 
 	USART1->ICR = USART1->ISR;
-
-	if (USART1->ISR & (USART_ISR_FE | USART_ISR_ORE | USART_ISR_NE)) {
-		uartErrors++;
-	}
 }
 
 void uartResetCrc() {
@@ -105,11 +102,11 @@ int uartAvailable() {
 }
 
 uint8_t uartGetc() {
-	unsigned long t = 0;
+//	unsigned long t = 0;
 	do {
-		if (t++ == 6000) {
-			uartStartBaudRateDetection();
-		}
+//		if (t++ == 6000) {
+//			uartStartBaudRateDetection();
+//		}
 	} while (uartPos == (UART_BUF_SIZE - DMA1_Channel5->CNDTR));
 
 	uint8_t res;

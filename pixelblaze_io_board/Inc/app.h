@@ -39,4 +39,10 @@ void uartRead(void *dst, int size);
 uint8_t uartGetc();
 int uartAvailable();
 
+
+uint32_t micros();
+static inline uint16_t microsFast() {
+	return TIM14->CNT;
+}
+
 #endif
