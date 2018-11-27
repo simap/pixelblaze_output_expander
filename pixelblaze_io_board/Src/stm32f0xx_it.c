@@ -186,7 +186,7 @@ void TIM14_IRQHandler(void)
 }
 
 /**
-* @brief This function handles USART1 global interrupt / USART1 wake-up interrupt through EXTI line 25.
+* @brief This function handles USART1 global interrupt.
 */
 void USART1_IRQHandler(void)
 {

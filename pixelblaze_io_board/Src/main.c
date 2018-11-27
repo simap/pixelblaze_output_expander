@@ -56,11 +56,11 @@ static void LL_Init(void);
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
-static void MX_USART1_UART_Init(void);
-static void MX_TIM1_Init(void);
-static void MX_TIM2_Init(void);
 static void MX_CRC_Init(void);
+static void MX_TIM1_Init(void);
+static void MX_TIM3_Init(void);
 static void MX_TIM14_Init(void);
+static void MX_USART1_UART_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -102,11 +102,11 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_USART1_UART_Init();
-  MX_TIM1_Init();
-  MX_TIM2_Init();
   MX_CRC_Init();
+  MX_TIM1_Init();
+  MX_TIM3_Init();
   MX_TIM14_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
   setup();
@@ -307,7 +307,7 @@ static void MX_TIM1_Init(void)
 
   LL_TIM_OC_DisableFast(TIM1, LL_TIM_CHANNEL_CH4);
 
-  LL_TIM_SetTriggerInput(TIM1, LL_TIM_TS_ITR1);
+  LL_TIM_SetTriggerInput(TIM1, LL_TIM_TS_ITR2);
 
   LL_TIM_SetSlaveMode(TIM1, LL_TIM_SLAVEMODE_GATED);
 
@@ -330,42 +330,42 @@ static void MX_TIM1_Init(void)
 
 }
 
-/* TIM2 init function */
-static void MX_TIM2_Init(void)
+/* TIM3 init function */
+static void MX_TIM3_Init(void)
 {
 
   LL_TIM_InitTypeDef TIM_InitStruct;
   LL_TIM_OC_InitTypeDef TIM_OC_InitStruct;
 
   /* Peripheral clock enable */
-  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM2);
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM3);
 
-  TIM_InitStruct.Prescaler = 0;
+  TIM_InitStruct.Prescaler = 5;
   TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_UP;
-  TIM_InitStruct.Autoreload = 345599;
+  TIM_InitStruct.Autoreload = 57599;
   TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
-  LL_TIM_Init(TIM2, &TIM_InitStruct);
+  LL_TIM_Init(TIM3, &TIM_InitStruct);
 
-  LL_TIM_DisableARRPreload(TIM2);
+  LL_TIM_DisableARRPreload(TIM3);
 
-  LL_TIM_SetClockSource(TIM2, LL_TIM_CLOCKSOURCE_INTERNAL);
+  LL_TIM_SetClockSource(TIM3, LL_TIM_CLOCKSOURCE_INTERNAL);
 
-  LL_TIM_OC_EnablePreload(TIM2, LL_TIM_CHANNEL_CH1);
+  LL_TIM_OC_EnablePreload(TIM3, LL_TIM_CHANNEL_CH1);
 
   TIM_OC_InitStruct.OCMode = LL_TIM_OCMODE_PWM2;
   TIM_OC_InitStruct.OCState = LL_TIM_OCSTATE_DISABLE;
   TIM_OC_InitStruct.OCNState = LL_TIM_OCSTATE_DISABLE;
   TIM_OC_InitStruct.CompareValue = 1;
   TIM_OC_InitStruct.OCPolarity = LL_TIM_OCPOLARITY_HIGH;
-  LL_TIM_OC_Init(TIM2, LL_TIM_CHANNEL_CH1, &TIM_OC_InitStruct);
+  LL_TIM_OC_Init(TIM3, LL_TIM_CHANNEL_CH1, &TIM_OC_InitStruct);
 
-  LL_TIM_OC_EnableFast(TIM2, LL_TIM_CHANNEL_CH1);
+  LL_TIM_OC_DisableFast(TIM3, LL_TIM_CHANNEL_CH1);
 
-  LL_TIM_SetOnePulseMode(TIM2, LL_TIM_ONEPULSEMODE_SINGLE);
+  LL_TIM_SetOnePulseMode(TIM3, LL_TIM_ONEPULSEMODE_SINGLE);
 
-  LL_TIM_SetTriggerOutput(TIM2, LL_TIM_TRGO_OC1REF);
+  LL_TIM_SetTriggerOutput(TIM3, LL_TIM_TRGO_OC1REF);
 
-  LL_TIM_EnableMasterSlaveMode(TIM2);
+  LL_TIM_EnableMasterSlaveMode(TIM3);
 
 }
 
@@ -410,7 +410,7 @@ static void MX_USART1_UART_Init(void)
   GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
   GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_HIGH;
   GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_OPENDRAIN;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_UP;
   GPIO_InitStruct.Alternate = LL_GPIO_AF_1;
   LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
@@ -444,10 +444,6 @@ static void MX_USART1_UART_Init(void)
   USART_InitStruct.TransferDirection = LL_USART_DIRECTION_RX;
   USART_InitStruct.OverSampling = LL_USART_OVERSAMPLING_16;
   LL_USART_Init(USART1, &USART_InitStruct);
-
-  LL_USART_EnableAutoBaudRate(USART1);
-
-  LL_USART_SetAutoBaudRateMode(USART1, LL_USART_AUTOBAUD_DETECT_ON_55_FRAME);
 
   LL_USART_ConfigHalfDuplexMode(USART1);
 
