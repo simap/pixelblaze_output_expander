@@ -31,7 +31,7 @@ uint32_t bitBuffer[BYTES_PER_CHANNEL * 2]; //1920 pixels, 240x8 RGB, 180x8 RGBW
 
 //TODO short timeout on rx and reset auto baud rate detection
 
-const static char MAGIC[] = { "UPXL" }; //starts with 0x55, good for auto baud rate detection
+//const static char MAGIC[] = { "UPXL" }; //starts with 0x55, good for auto baud rate detection
 
 typedef struct {
 	int8_t magic[4];
@@ -55,12 +55,17 @@ PBChannel channels[8];
 const uint8_t ones = 0xff;
 uint8_t startBits = 0;
 
-volatile uint8_t drawingBusy;
-volatile uint32_t crcErrors;
-volatile uint32_t frameMisses;
-volatile uint32_t drawCount;
+uint8_t drawingBusy;
+volatile uint32_t lastDrawTimer;
 
-uint8_t getBusId() {
+volatile struct {
+	uint16_t crcErrors;
+	uint16_t frameMisses;
+	uint16_t drawCount;
+	uint16_t overDraw;
+} debugStats;
+
+static inline uint8_t getBusId() {
 	uint8_t busId = 0;
 	if ((GPIOB->IDR & GPIO_IDR_1)) //pb1
 		busId |= 1;
@@ -72,22 +77,13 @@ uint8_t getBusId() {
 }
 
 
-void startDrawingChannles() {
-	if (drawingBusy) {
+static inline void startDrawingChannles() {
+	if (drawingBusy || micros() - lastDrawTimer < 300) {
+		debugStats.overDraw++;
 		return;
 	}
-	drawCount++;
+	debugStats.drawCount++;
 	drawingBusy = 1;
-	LL_TIM_DisableCounter(TIM1);
-	TIM1->CNT = 0;
-	LL_TIM_EnableCounter(TIM1);
-
-	DMA1_Channel3->CCR &= ~DMA_CCR_EN;
-	DMA1_Channel3->CNDTR = BYTES_TOTAL;
-	DMA1_Channel3->CCR |= DMA_CCR_EN | DMA_CCR_TCIE;
-
-
-	DMA1->IFCR |= DMA_IFCR_CTCIF3;
 
 	startBits = 0;
 	for (int ch = 0; ch < 8; ch++) {
@@ -95,7 +91,23 @@ void startDrawingChannles() {
 			startBits |= 1<<ch;
 	}
 
-	LL_TIM_EnableCounter(TIM2);
+	LL_TIM_DisableCounter(TIM1);
+	TIM1->CNT = 0;
+
+	// pausing around here causes all white, as if tim1 was enabled and driving dma with no data bits
+	DMA1_Channel3->CCR &= ~DMA_CCR_EN;
+	DMA1_Channel3->CNDTR = BYTES_TOTAL;
+	DMA1->IFCR |= DMA_IFCR_CTCIF3;
+
+	LL_TIM_EnableCounter(TIM1);
+	LL_TIM_EnableCounter(TIM3);
+	//there seems to be a pending dma request on ch3, possibly related to the timer
+	//enabling dma last seems to help avoid an extra long start bit
+	//there's still some slight glitches on first pixel
+	//TODO see if maybe tim1 has lefover from last cycle, maybe tim3 needs adjusting
+	//TODO I think the other dma channels are fighting/triggering all at the same time, maybe when tim1 is disabled
+
+	DMA1_Channel3->CCR |= DMA_CCR_EN | DMA_CCR_TCIE;
 }
 
 void setup() {
@@ -127,7 +139,7 @@ void setup() {
 	TIM1->DIER = TIM_DIER_CC1DE | TIM_DIER_CC2DE | TIM_DIER_CC4DE;
 
 //	LL_TIM_EnableMasterSlaveMode(TIM1);
-	LL_TIM_EnableMasterSlaveMode(TIM2);
+	LL_TIM_EnableMasterSlaveMode(TIM3);
 
 	LL_TIM_EnableCounter(TIM1);
 
@@ -136,7 +148,7 @@ void setup() {
 
 }
 
-void handleIncomming() {
+static inline void handleIncomming() {
 	uartResetCrc();
 	if (uartGetc() == 'U' && uartGetc() == 'P' && uartGetc() == 'X' && uartGetc() == 'L') {
 		volatile uint32_t timer = micros();
@@ -178,30 +190,38 @@ void handleIncomming() {
 				if (ch.numElements == 4) {
 					elements[ow] = uartGetc();
 				}
+
+//				if (channel == 0)
+//					elements[0] = elements[1] = elements[2] = 129;
+//				else
+//					elements[0] = elements[1] = elements[2] = 0;
+
 //				for (int j = 0; j < ch.numElements; j++)
 //					bitCopyMsb(dst + j*2, channel, elements[j]);
 				bitConverter(dst, channel, elements, ch.numElements);
 				dst += stride;
 			}
 
-			uint32_t crcExpected = uartGetCrc();
-			uint32_t crcRead;
+			volatile uint32_t crcExpected = uartGetCrc();
+			volatile uint32_t crcRead;
 			uartRead(&crcRead, sizeof(crcRead));
 
 			if (channel < 8) {
-				int zeroStart = 0;
+				int blocksToZero;
 				if (crcExpected == crcRead) {
+					if (ch.pixels * ch.numElements >= channels[channel].pixels * channels[channel].numElements) {
+						blocksToZero = 0;
+					} else {
+						blocksToZero = BYTES_PER_CHANNEL - ch.numElements * ch.pixels;
+					}
 					channels[channel] = ch;
-					zeroStart = ch.numElements * ch.pixels * 2;
 				} else {
-					crcErrors++;
+					debugStats.crcErrors++;
 					channels[channel].numElements = 0; //garbage, disable the channel, zero everything
+					blocksToZero = BYTES_PER_CHANNEL;
 				}
-
-				//zero remaining data
-				int blocksToZero = BYTES_PER_CHANNEL - zeroStart/2;
 				if (blocksToZero > 0)
-					bitSetZeros(bitBuffer + zeroStart, channel, blocksToZero);
+					bitSetZeros(bitBuffer + (BYTES_PER_CHANNEL - blocksToZero)*2, channel, blocksToZero);
 			}
 			volatile int32_t duration = micros() - timer;
 			ms += 0;
@@ -213,9 +233,9 @@ void handleIncomming() {
 			uint32_t crcRead;
 			uartRead(&crcRead, sizeof(crcRead));
 			if (crcExpected == crcRead) {
-//				startDrawingChannles();
+				startDrawingChannles();
 			} else {
-				crcErrors++;
+				debugStats.crcErrors++;
 			}
 			volatile long duration = microsFast() - timer;
 			ms += 0;
@@ -227,7 +247,13 @@ void handleIncomming() {
 		}
 
 	} else {
-		frameMisses++;
+		debugStats.frameMisses++;
+		toggle = !toggle;
+		if (toggle) {
+			GPIOF->BRR |= 1;
+		} else {
+			GPIOF->BSRR |= 1;
+		}
 	}
 }
 
@@ -236,6 +262,15 @@ void loop() {
 		//heartbeat
 		if (ms - timer > 100) {
 			timer = ms;
+
+//			uint32_t t = micros();
+//			for (int i = 0; i < 8; i++) {
+//				bitSetZeros(bitBuffer, i, BYTES_PER_CHANNEL);
+//			}
+//			volatile int32_t d = micros() - t;
+//			ms += 0;
+
+
 			toggle = !toggle;
 			if (toggle) {
 				GPIOF->BRR |= 1;
@@ -255,7 +290,7 @@ void loop() {
 		 for (int i = 0; i < 100000; i++) {
 		 //			bitflip8(out, in);
 		 bitMangler0(out, i);
-		 //			LL_TIM_EnableCounter(TIM2);
+		 //			LL_TIM_EnableCounter(TIM3);
 		 }
 
 		 volatile unsigned long t2 = ms - t1;

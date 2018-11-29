@@ -48,20 +48,17 @@ void bitSetZeros(uint32_t *dst, uint8_t channel, int numBlocks) {
 template<uint8_t C>
 void bitConverterT(uint32_t *dst, uint8_t *data, int size) {
 	union b32 *o0, *o1;
-
-	volatile intptr_t o0a = (intptr_t)&o0;
-	volatile intptr_t o1a = (intptr_t)&o1;
-	volatile intptr_t dsta = (intptr_t)&dst;
 	o0 = (union b32*) dst;
 	o1 = (union b32*) dst+1;
-	uint32_t canary = 0;
+
+	volatile intptr_t foo = (intptr_t) &o1;
 
 	while (size--) {
 		uint8_t in = *data++;
 
-		if ((uint32_t*)o0 > dst + 8 || (uint32_t*)o1 > dst+8) {
-			*((uint32_t *)0) = 4;
-		}
+//		if ((uint32_t*)o0 > dst + 8 || (uint32_t*)o1 > dst+8) {
+//			*((uint32_t *)0) = 4;
+//		}
 
 		switch (C) {
 		case 0:
@@ -144,9 +141,6 @@ void bitConverterT(uint32_t *dst, uint8_t *data, int size) {
 		o0 += 2;
 		o1 += 2;
 	}
-	if (canary++)
-		*data += 0;
-
 }
 #ifdef __cplusplus
 extern "C" {

@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 
-#define UART_BUF_SIZE 128
+#define UART_BUF_SIZE 64
 
 void setup();
 void loop() ;

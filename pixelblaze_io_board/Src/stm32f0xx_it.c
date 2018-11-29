@@ -38,6 +38,7 @@
 
 extern volatile unsigned long ms;
 extern volatile uint8_t drawingBusy;
+extern volatile uint32_t lastDrawTimer;
 extern volatile uint32_t microsOverflow;
 extern void uartIsr();
 
@@ -139,6 +140,7 @@ void DMA1_Channel2_3_IRQHandler(void)
 	if (DMA1->ISR & DMA_ISR_TCIF3) {
 		DMA1->IFCR |= DMA_ISR_TCIF3;
 		drawingBusy = 0;
+		lastDrawTimer = micros();
 	} else {
 		HardFault_Handler();
 	}

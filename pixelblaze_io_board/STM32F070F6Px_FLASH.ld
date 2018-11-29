@@ -35,8 +35,8 @@ ENTRY(Reset_Handler)
 /* Highest address of the user mode stack */
 _estack = 0x20001800;    /* end of RAM */
 /* Generate a link error if heap and stack don't fit into RAM */
-_Min_Heap_Size = 0x70;      /* required amount of heap  */
-_Min_Stack_Size = 0x010; /* required amount of stack */
+_Min_Heap_Size = 0x0;      /* required amount of heap  */
+_Min_Stack_Size = 0x0c0; /* required amount of stack */
 
 /* Specify the memory areas */
 MEMORY
