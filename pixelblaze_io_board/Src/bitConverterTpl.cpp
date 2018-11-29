@@ -50,16 +50,8 @@ void bitConverterT(uint32_t *dst, uint8_t *data, int size) {
 	union b32 *o0, *o1;
 	o0 = (union b32*) dst;
 	o1 = (union b32*) dst+1;
-
-	volatile intptr_t foo = (intptr_t) &o1;
-
 	while (size--) {
 		uint8_t in = *data++;
-
-//		if ((uint32_t*)o0 > dst + 8 || (uint32_t*)o1 > dst+8) {
-//			*((uint32_t *)0) = 4;
-//		}
-
 		switch (C) {
 		case 0:
 			o1->p0d = in;

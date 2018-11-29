@@ -91,23 +91,23 @@ static inline void startDrawingChannles() {
 			startBits |= 1<<ch;
 	}
 
-	LL_TIM_DisableCounter(TIM1);
-	TIM1->CNT = 0;
 
 	// pausing around here causes all white, as if tim1 was enabled and driving dma with no data bits
 	DMA1_Channel3->CCR &= ~DMA_CCR_EN;
 	DMA1_Channel3->CNDTR = BYTES_TOTAL;
 	DMA1->IFCR |= DMA_IFCR_CTCIF3;
+	DMA1_Channel3->CCR |= DMA_CCR_EN | DMA_CCR_TCIE;
 
+	TIM1->CNT = 0; //for some reason, tim1 doesnt restart properly unless cleared.
 	LL_TIM_EnableCounter(TIM1);
 	LL_TIM_EnableCounter(TIM3);
 	//there seems to be a pending dma request on ch3, possibly related to the timer
 	//enabling dma last seems to help avoid an extra long start bit
 	//there's still some slight glitches on first pixel
-	//TODO see if maybe tim1 has lefover from last cycle, maybe tim3 needs adjusting
+	//TODO see if maybe tim1 has leftover from last cycle, maybe tim3 needs adjusting
 	//TODO I think the other dma channels are fighting/triggering all at the same time, maybe when tim1 is disabled
 
-	DMA1_Channel3->CCR |= DMA_CCR_EN | DMA_CCR_TCIE;
+
 }
 
 void setup() {
