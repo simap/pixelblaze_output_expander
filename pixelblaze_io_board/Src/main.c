@@ -342,6 +342,7 @@ static void MX_TIM3_Init(void)
 
   TIM_InitStruct.Prescaler = 5;
   TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_UP;
+//  TIM_InitStruct.Autoreload = 57599;
   TIM_InitStruct.Autoreload = 57599;
   TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
   LL_TIM_Init(TIM3, &TIM_InitStruct);

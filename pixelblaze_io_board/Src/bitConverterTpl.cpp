@@ -64,6 +64,7 @@ void bitConverterT(uint32_t *dst, uint8_t *data, int size) {
 			o0->p0a = in >> 7;
 			break;
 		case 1:
+			o1->p1d = in;
 			o1->p1c = in >> 1;
 			o1->p1b = in >> 2;
 			o1->p1a = in >> 3;
@@ -73,6 +74,7 @@ void bitConverterT(uint32_t *dst, uint8_t *data, int size) {
 			o0->p1a = in >> 7;
 			break;
 		case 2:
+			o1->p2d = in;
 			o1->p2c = in >> 1;
 			o1->p2b = in >> 2;
 			o1->p2a = in >> 3;
@@ -82,6 +84,7 @@ void bitConverterT(uint32_t *dst, uint8_t *data, int size) {
 			o0->p2a = in >> 7;
 			break;
 		case 3:
+			o1->p3d = in;
 			o1->p3c = in >> 1;
 			o1->p3b = in >> 2;
 			o1->p3a = in >> 3;
@@ -91,6 +94,7 @@ void bitConverterT(uint32_t *dst, uint8_t *data, int size) {
 			o0->p3a = in >> 7;
 			break;
 		case 4:
+			o1->p4d = in;
 			o1->p4c = in >> 1;
 			o1->p4b = in >> 2;
 			o1->p4a = in >> 3;
@@ -100,6 +104,7 @@ void bitConverterT(uint32_t *dst, uint8_t *data, int size) {
 			o0->p4a = in >> 7;
 			break;
 		case 5:
+			o1->p5d = in;
 			o1->p5c = in >> 1;
 			o1->p5b = in >> 2;
 			o1->p5a = in >> 3;
@@ -109,6 +114,7 @@ void bitConverterT(uint32_t *dst, uint8_t *data, int size) {
 			o0->p5a = in >> 7;
 			break;
 		case 6:
+			o1->p6d = in;
 			o1->p6c = in >> 1;
 			o1->p6b = in >> 2;
 			o1->p6a = in >> 3;
@@ -118,6 +124,7 @@ void bitConverterT(uint32_t *dst, uint8_t *data, int size) {
 			o0->p6a = in >> 7;
 			break;
 		case 7:
+			o1->p7d = in;
 			o1->p7c = in >> 1;
 			o1->p7b = in >> 2;
 			o1->p7a = in >> 3;

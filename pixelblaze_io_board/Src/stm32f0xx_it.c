@@ -141,6 +141,8 @@ void DMA1_Channel2_3_IRQHandler(void)
 		DMA1->IFCR |= DMA_ISR_TCIF3;
 		drawingBusy = 0; //technically only data xfer is done, but we are still going to clear this last bit when tim1 cc3 fires
 		lastDrawTimer = micros();
+		GPIOF->BRR |= 1;
+
 	} else {
 		HardFault_Handler();
 	}

@@ -71,7 +71,7 @@ void uartIsr() {
 */
 	//check all the uart error conditions and clear it
 	if (USART1->ISR & (USART_ISR_FE | USART_ISR_ORE | USART_ISR_NE)) {
-		USART1->ICR |= USART_ICR_FECF |USART_ICR_ORECF | USART_ICR_NCF;
+//		USART1->ICR |= USART_ICR_FECF |USART_ICR_ORECF | USART_ICR_NCF;
 		uartErrors++;
 	}
 

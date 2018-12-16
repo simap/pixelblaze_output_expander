@@ -53,6 +53,7 @@ PBChannel channels[8];
 
 
 const uint8_t ones = 0xff;
+const uint8_t zeros = 0x00;
 uint8_t startBits = 0;
 
 uint8_t drawingBusy;
@@ -82,8 +83,10 @@ static inline void startDrawingChannles() {
 		debugStats.overDraw++;
 		return;
 	}
+	GPIOF->BSRR |= 1;
 	debugStats.drawCount++;
 	drawingBusy = 1;
+
 
 	startBits = 0;
 	for (int ch = 0; ch < 8; ch++) {
@@ -92,13 +95,25 @@ static inline void startDrawingChannles() {
 	}
 
 
-	// pausing around here causes all white, as if tim1 was enabled and driving dma with no data bits
+	//OK this is a bit weird, there's some kind of pending DMA request that will transfer immediately and shift bits by one
+	//set it up to write a zero, then set it up again
+	DMA1_Channel3->CCR &= ~DMA_CCR_EN | DMA_CCR_TCIE;
+	DMA1_Channel3->CMAR = (uint32_t) &ones;
+	DMA1_Channel3->CPAR = (uint32_t) &GPIOA->BRR;
+	DMA1_Channel3->CNDTR = 10;
+	DMA1_Channel3->CCR |= DMA_CCR_EN;
+
+	//turn it off, set up dma to transfer from bitBuffer
 	DMA1_Channel3->CCR &= ~DMA_CCR_EN;
+	DMA1_Channel3->CMAR = (uint32_t) &bitBuffer;
+	DMA1_Channel3->CPAR = (uint32_t) &GPIOA->ODR;
 	DMA1_Channel3->CNDTR = BYTES_TOTAL;
 	DMA1->IFCR |= DMA_IFCR_CTCIF3;
 	DMA1_Channel3->CCR |= DMA_CCR_EN | DMA_CCR_TCIE;
 
+
 	TIM1->CNT = 0; //for some reason, tim1 doesnt restart properly unless cleared.
+
 	LL_TIM_EnableCounter(TIM1);
 	LL_TIM_EnableCounter(TIM3);
 	//there seems to be a pending dma request on ch3, possibly related to the timer
@@ -106,7 +121,6 @@ static inline void startDrawingChannles() {
 	//there's still some slight glitches on first pixel
 	//TODO see if maybe tim1 has leftover from last cycle, maybe tim3 needs adjusting
 	//TODO I think the other dma channels are fighting/triggering all at the same time, maybe when tim1 is disabled
-
 
 }
 
@@ -190,6 +204,11 @@ static inline void handleIncomming() {
 				if (ch.numElements == 4) {
 					elements[ow] = uartGetc();
 				}
+//				if ((elements[0] != 255 || elements[1] != 255 || elements[2] != 255) &&
+//						(elements[0] != 0 || elements[1] != 0 || elements[2] != 0)) {
+//					ms += 0;
+//				}
+
 
 //				if (channel == 0)
 //					elements[0] = elements[1] = elements[2] = 129;
@@ -198,6 +217,8 @@ static inline void handleIncomming() {
 
 //				for (int j = 0; j < ch.numElements; j++)
 //					bitCopyMsb(dst + j*2, channel, elements[j]);
+//				if (elements[0] == 255)
+//					ms += 0;
 				bitConverter(dst, channel, elements, ch.numElements);
 				dst += stride;
 			}
@@ -248,17 +269,12 @@ static inline void handleIncomming() {
 
 	} else {
 		debugStats.frameMisses++;
-		toggle = !toggle;
-		if (toggle) {
-			GPIOF->BRR |= 1;
-		} else {
-			GPIOF->BSRR |= 1;
-		}
 	}
 }
 
 void loop() {
 	for (;;) {
+
 		//heartbeat
 		if (ms - timer > 100) {
 			timer = ms;
@@ -271,12 +287,12 @@ void loop() {
 //			ms += 0;
 
 
-			toggle = !toggle;
-			if (toggle) {
-				GPIOF->BRR |= 1;
-			} else {
-				GPIOF->BSRR |= 1;
-			}
+//			toggle = !toggle;
+//			if (toggle) {
+//				GPIOF->BRR |= 1;
+//			} else {
+//				GPIOF->BSRR |= 1;
+//			}
 		}
 
 		if (uartAvailable() > 0) {
