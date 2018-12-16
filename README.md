@@ -85,7 +85,7 @@ Data to be sent out to the LEDs is assembled into bit positions, and then timers
 
 TIM1 is set up in slave mode and is gated to TIM3. As long as TIM3 is active, TIM1 is running.
 
-TIM1 has 3 PWM/CC channels set up, each driggers a different DMA channel to fire. 
+TIM1 has 3 PWM/CC channels set up, each triggers a different DMA channel to fire. 
 
 3 DMA channels are set up:
 
