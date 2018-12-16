@@ -31,7 +31,7 @@ union b32 {
 				p0c :1, p1c :1, p2c :1, p3c :1, p4c :1, p5c :1, p6c :1, p7c :1,
 				p0d :1, p1d :1, p2d :1, p3d :1, p4d :1, p5d :1, p6d :1, p7d :1;
 	};
-} o0, o1;
+};
 
 
 //assumes 8 byte blocks, size in 8 byte blocks
