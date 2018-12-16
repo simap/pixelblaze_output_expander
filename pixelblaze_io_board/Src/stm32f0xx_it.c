@@ -37,8 +37,7 @@
 /* USER CODE BEGIN 0 */
 
 extern volatile unsigned long ms;
-extern volatile uint8_t drawingBusy;
-extern volatile uint32_t lastDrawTimer;
+extern void drawingComplete();
 extern volatile uint32_t microsOverflow;
 extern void uartIsr();
 
@@ -136,18 +135,12 @@ void SysTick_Handler(void)
 void DMA1_Channel2_3_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Channel2_3_IRQn 0 */
-
 	if (DMA1->ISR & DMA_ISR_TCIF3) {
 		DMA1->IFCR |= DMA_ISR_TCIF3;
-		drawingBusy = 0; //technically only data xfer is done, but we are still going to clear this last bit when tim1 cc3 fires
-		lastDrawTimer = micros();
-		GPIOF->BRR |= 1;
-
+		drawingComplete();
 	} else {
 		HardFault_Handler();
 	}
-
-
   /* USER CODE END DMA1_Channel2_3_IRQn 0 */
   
   /* USER CODE BEGIN DMA1_Channel2_3_IRQn 1 */

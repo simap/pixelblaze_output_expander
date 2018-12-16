@@ -3,62 +3,51 @@
 #include <string.h>
 
 volatile unsigned long ms;
-unsigned long timer;
 
-int toggle = 0;
+//uart -> dma -> circular buffer -> handleIncomming() -> channel buffers -> dma + timers -> gpio
 
-//uart -> dma -> command buffer -> handleCommand() -> pixel buffers -> dma + timers -> gpio
-
-//frame, use OPC?
-//channel	command	length (n)	data
-//0 to 255	0 to 255	high byte	low byte	n bytes of message data
-//can use our chip address to offset by multiples of 8 for channel
-
-//"pixl", channel, type, length[16], options[32],, data[], CRC
-
-// on timer update : trigger writing ones
-// on timer pwm 1: write from data
-// on timer pwm 2: write zeros (or write ones to reset register)
-
-//somehow stop this after all data is sent - maybe a timer, maybe dma xfer complete interrrupt
-//i might be OK for a few stray '1' bits to go out?
-//when dma is done, pwm 1 will stop clearing the bits, causing a stream of '1's to be written
-//maybe some way to slave the timer?
 
 #define BYTES_PER_CHANNEL 720
 #define BYTES_TOTAL (BYTES_PER_CHANNEL * 8)
 uint32_t bitBuffer[BYTES_PER_CHANNEL * 2]; //1920 pixels, 240x8 RGB, 180x8 RGBW
 
-//TODO short timeout on rx and reset auto baud rate detection
-
+// These vars and data structures are left for reference:
 //const static char MAGIC[] = { "UPXL" }; //starts with 0x55, good for auto baud rate detection
-
-typedef struct {
-	int8_t magic[4];
-	uint8_t channel;
-	uint8_t recordType; //set channel ws2812 opts+data, draw all
-} PBFrameHeader;
+// frame headers look like this:
+//typedef struct {
+//	int8_t magic[4]; //"UPXL"
+//	uint8_t channel;
+//	uint8_t recordType; //set channel ws2812 opts+data, draw all
+//} PBFrameHeader;
 
 enum {
-	SET_CHANNEL_WS2812 = 1, DRAW_ALL, BLINK_ID_LED
+	SET_CHANNEL_WS2812 = 1, DRAW_ALL
 } RecordType;
 
 typedef struct {
-	uint8_t numElements; //0 to disable channel, usually 3 or 4
+	uint8_t numElements; //0 to disable channel, usually 3 (RGB) or 4 (RGBW)
 	uint8_t or :2, og :2, ob :2, ow :2; //color orders, data on the line assumed to be RGB or RGBW
 	uint16_t pixels;
 } PBChannel;
 
 PBChannel channels[8];
 
-
+//single byte vars for DMA to GPIO
 const uint8_t ones = 0xff;
 const uint8_t zeros = 0x00;
 uint8_t startBits = 0;
 
-uint8_t drawingBusy;
-volatile uint32_t lastDrawTimer;
+uint8_t drawingBusy; //set when we start drawing, cleared when dma xfer is complete
+volatile uint32_t lastDrawTimer; //to allow ws2812/13 to latch, set when dma xfer is complete
 
+static inline void ledOn() {
+	GPIOF->BSRR |= GPIO_ODR_0;
+}
+static inline void ledOff() {
+	GPIOF->BRR |= GPIO_ODR_0;
+}
+
+//some stats for debugging, in a struct to save a few bytes
 volatile struct {
 	uint16_t crcErrors;
 	uint16_t frameMisses;
@@ -66,24 +55,24 @@ volatile struct {
 	uint16_t overDraw;
 } debugStats;
 
+//3 pins have cuttable jumpers that create an ID on a bus, bits 3-5 of the channel
 static inline uint8_t getBusId() {
 	uint8_t busId = 0;
-	if ((GPIOB->IDR & GPIO_IDR_1)) //pb1
+	if ((GPIOB->IDR & GPIO_IDR_1))
 		busId |= 1;
-	if ((GPIOA->IDR & GPIO_IDR_10)) //pb1
+	if ((GPIOA->IDR & GPIO_IDR_10))
 		busId |= 2;
-	if ((GPIOF->IDR & GPIO_IDR_1)) //pb1
+	if ((GPIOF->IDR & GPIO_IDR_1))
 		busId |= 4;
 	return busId;
 }
-
 
 static inline void startDrawingChannles() {
 	if (drawingBusy || micros() - lastDrawTimer < 300) {
 		debugStats.overDraw++;
 		return;
 	}
-	GPIOF->BSRR |= 1;
+	ledOn(); // status LED, cleared when dma xfer is complete
 	debugStats.drawCount++;
 	drawingBusy = 1;
 
@@ -93,7 +82,6 @@ static inline void startDrawingChannles() {
 		if (channels[ch].numElements)
 			startBits |= 1<<ch;
 	}
-
 
 	//OK this is a bit weird, there's some kind of pending DMA request that will transfer immediately and shift bits by one
 	//set it up to write a zero, then set it up again
@@ -116,56 +104,60 @@ static inline void startDrawingChannles() {
 
 	LL_TIM_EnableCounter(TIM1);
 	LL_TIM_EnableCounter(TIM3);
-	//there seems to be a pending dma request on ch3, possibly related to the timer
-	//enabling dma last seems to help avoid an extra long start bit
-	//there's still some slight glitches on first pixel
-	//TODO see if maybe tim1 has leftover from last cycle, maybe tim3 needs adjusting
-	//TODO I think the other dma channels are fighting/triggering all at the same time, maybe when tim1 is disabled
-
 }
 
+void drawingComplete() {
+	drawingBusy = 0; //technically only data xfer is done, but we are still going to clear the last bit when tim1 cc3 fires
+	lastDrawTimer = micros();
+	ledOff();
+}
+
+//anything not already initialized by the generated LL drivers
 void setup() {
 	LL_SYSTICK_EnableIT();
 
+	//stop everything when debugging
 	DBGMCU->APB1FZ = 0xffff;
 	DBGMCU->APB2FZ = 0xffff;
 
 	uartSetup();
 
-	//fires with TIM1_CH1
+	//set up the 3 stages of DMA triggers.
+	//fires with TIM1_CH1 - set a start bit (if channel is enabled)
 	DMA1_Channel2->CMAR = (uint32_t) &startBits;
 	DMA1_Channel2->CPAR = (uint32_t) &GPIOA->BSRR;
 	DMA1_Channel2->CNDTR = 1;
 	DMA1_Channel2->CCR |= DMA_CCR_EN; // | DMA_CCR_TCIE;
 
-	//fires with TIM1_CH2
+	//fires with TIM1_CH2 - set the data bit, this either continues the pulse or turns it into a short one
 	DMA1_Channel3->CMAR = (uint32_t) &bitBuffer;
 	DMA1_Channel3->CPAR = (uint32_t) &GPIOA->ODR;
 	//enable later
 //	DMA1_Channel3->CCR |= DMA_CCR_EN; // | DMA_CCR_TCIE;
 
-	//fires with TIM1_CH4
+	//fires with TIM1_CH4 - finally clears the pulse
 	DMA1_Channel4->CMAR = (uint32_t) &ones;
 	DMA1_Channel4->CPAR = (uint32_t) &GPIOA->BRR;
 	DMA1_Channel4->CNDTR = 1;
 	DMA1_Channel4->CCR |= DMA_CCR_EN; // | DMA_CCR_TCIE;
 
+	//enable the dma xfers on capture compare events
 	TIM1->DIER = TIM_DIER_CC1DE | TIM_DIER_CC2DE | TIM_DIER_CC4DE;
 
-//	LL_TIM_EnableMasterSlaveMode(TIM1);
 	LL_TIM_EnableMasterSlaveMode(TIM3);
 
 	LL_TIM_EnableCounter(TIM1);
 
+	//tim14 is used for micros() timebase
 	LL_TIM_EnableIT_UPDATE(TIM14);
 	LL_TIM_EnableCounter(TIM14);
-
 }
 
+// this is the main uart scan function. It ignores data until the magic UPLX string is seen
 static inline void handleIncomming() {
 	uartResetCrc();
+	//look for the 4 byte magic header sequence
 	if (uartGetc() == 'U' && uartGetc() == 'P' && uartGetc() == 'X' && uartGetc() == 'L') {
-		volatile uint32_t timer = micros();
 		uint8_t channel = uartGetc();
 		uint8_t recordType = uartGetc();
 		switch (recordType) {
@@ -204,21 +196,6 @@ static inline void handleIncomming() {
 				if (ch.numElements == 4) {
 					elements[ow] = uartGetc();
 				}
-//				if ((elements[0] != 255 || elements[1] != 255 || elements[2] != 255) &&
-//						(elements[0] != 0 || elements[1] != 0 || elements[2] != 0)) {
-//					ms += 0;
-//				}
-
-
-//				if (channel == 0)
-//					elements[0] = elements[1] = elements[2] = 129;
-//				else
-//					elements[0] = elements[1] = elements[2] = 0;
-
-//				for (int j = 0; j < ch.numElements; j++)
-//					bitCopyMsb(dst + j*2, channel, elements[j]);
-//				if (elements[0] == 255)
-//					ms += 0;
 				bitConverter(dst, channel, elements, ch.numElements);
 				dst += stride;
 			}
@@ -233,23 +210,24 @@ static inline void handleIncomming() {
 					if (ch.pixels * ch.numElements >= channels[channel].pixels * channels[channel].numElements) {
 						blocksToZero = 0;
 					} else {
+						//we need to zero out previous data if the data received was less than last time
 						blocksToZero = BYTES_PER_CHANNEL - ch.numElements * ch.pixels;
 					}
 					channels[channel] = ch;
 				} else {
+					//garbage data, disable the channel, zero everything.
+					//its better to let the LEDs keep the previous values than draw garbage.
 					debugStats.crcErrors++;
-					channels[channel].numElements = 0; //garbage, disable the channel, zero everything
+					channels[channel].numElements = 0;
 					blocksToZero = BYTES_PER_CHANNEL;
 				}
+				//zero out any remaining data in the buffer for this channel
 				if (blocksToZero > 0)
 					bitSetZeros(bitBuffer + (BYTES_PER_CHANNEL - blocksToZero)*2, channel, blocksToZero);
 			}
-			volatile int32_t duration = micros() - timer;
-			ms += 0;
 			break;
 		}
 		case DRAW_ALL: {
-			//TODO check to make sure its not still drawing
 			uint32_t crcExpected = uartGetCrc();
 			uint32_t crcRead;
 			uartRead(&crcRead, sizeof(crcRead));
@@ -258,13 +236,11 @@ static inline void handleIncomming() {
 			} else {
 				debugStats.crcErrors++;
 			}
-			volatile long duration = microsFast() - timer;
-			ms += 0;
 			break;
 		}
 		default:
 			break;
-			//error
+			//unsupported op or garbage frame, just wait for the next one
 		}
 
 	} else {
@@ -274,52 +250,8 @@ static inline void handleIncomming() {
 
 void loop() {
 	for (;;) {
-
-		//heartbeat
-		if (ms - timer > 100) {
-			timer = ms;
-
-//			uint32_t t = micros();
-//			for (int i = 0; i < 8; i++) {
-//				bitSetZeros(bitBuffer, i, BYTES_PER_CHANNEL);
-//			}
-//			volatile int32_t d = micros() - t;
-//			ms += 0;
-
-
-//			toggle = !toggle;
-//			if (toggle) {
-//				GPIOF->BRR |= 1;
-//			} else {
-//				GPIOF->BSRR |= 1;
-//			}
-		}
-
 		if (uartAvailable() > 0) {
 			handleIncomming();
 		}
-
-		/*
-		 unsigned long t1 = ms;
-		 uint8_t in[8] = {1,2,3,4,5,6,7,8};
-		 uint8_t out[8];
-		 for (int i = 0; i < 100000; i++) {
-		 //			bitflip8(out, in);
-		 bitMangler0(out, i);
-		 //			LL_TIM_EnableCounter(TIM3);
-		 }
-
-		 volatile unsigned long t2 = ms - t1;
-
-		 //100k 8 byte flips in 1543ms = 518KB/s
-		 //8x 800Kbps = 800KBps
-		 //to slow to flip in real time
-
-		 if (out[0] == 0xff && t2 > 100) {
-		 GPIOF->BSRR |= 1;
-		 }
-
-		 */
 	}
-
 }
