@@ -177,7 +177,7 @@ static inline void handleIncomming() {
 				//follow along, but ignore data
 				channel = 0xff;
 			} else {
-				channel = channel & 7;
+				channel = 7 - (channel & 7); //channel outputs are reverse numbered
 			}
 
 			uint8_t or = ch.or;
