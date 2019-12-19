@@ -87,45 +87,30 @@ static inline void startDrawingChannles() {
 		return;
 	}
 
-	debugStats.drawCount++;
-	drawingBusy = 1;
-
-
+	//don't send start bits for disabled channels
 	startBits = 0;
-	uint16_t maxBytes = 0;
+	//find the max bytes any channel wants to send and calculate TIM3 target and update dma xfer CNDTR
+	//otherwise FPS is capped based on theoretical max bytes. was less of a problem when there was 720 bytes
+	int maxBytes = 0;
 	for (int ch = 0; ch < 8; ch++) {
 		if (channels[ch].numElements)
 			startBits |= 1<<ch;
 		int chBytes = channels[ch].pixels * channels[ch].numElements;
-		if (chBYtes > maxBytes)
+		if (chBytes > maxBytes)
 			maxBytes = chBytes;
 	}
 
-	/*
-	 * e.g. for full 2500
-	 * 65535 / 2500 = 26.214
-	 * round up to 27
-	 *
-	 *
-	 * try again
-	 * 2500 bytes is 20000 bits, which is 1,600,000 cycles
-	 *   /65535 = 25 rounding up
-	 *
-	 * so we could use this to figure out a rough prescaler automatically
-	 *
-	 * but...
-	 *
-	 * since tim1 is cycling at 80 cycles, would a prescaler of 40 work? (or even 80?)
-	 * so tim3's count would match bit counts.
-	 *
-	 *
-	 * saving this working copy to git and will give it a try
-	 *
-	 */
+	int maxBits = maxBytes *8;
 
-	//TODO find the max bytes any channel wants to send and calculate TIM3 target and update dma xfer CNDTR
-	//otherwise FPS is capped based on theoretical max bytes. was less of a problem when there was 720 bytes
+	//all channels have length of zero!
+	if (maxBits == 0)
+		return;
 
+	debugStats.drawCount++;
+	drawingBusy = 1;
+
+	// tim3's prescaler matches tim1's cycle so each increment of tim3 is one bit-time
+	TIM3->ARR = maxBits;
 
 	//OK this is a bit weird, there's some kind of pending DMA request that will transfer immediately and shift bits by one
 	//set it up to write a zero, then set it up again
@@ -139,7 +124,7 @@ static inline void startDrawingChannles() {
 	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
 	DMA1_Channel6->CMAR = (uint32_t) &bitBuffer;
 	DMA1_Channel6->CPAR = (uint32_t) &GPIOA->ODR;
-	DMA1_Channel6->CNDTR = BYTES_TOTAL;
+	DMA1_Channel6->CNDTR = maxBits;
 	DMA1->IFCR |= DMA_IFCR_CTCIF3;
 	DMA1_Channel6->CCR |= DMA_CCR_EN | DMA_CCR_TCIE;
 
