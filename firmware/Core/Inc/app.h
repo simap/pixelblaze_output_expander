@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 
-#define UART_BUF_SIZE 64
+#define UART_BUF_SIZE 128
 
 void setup();
 void loop() ;
@@ -26,6 +26,7 @@ void bitMangler7(uint32_t * out, uint8_t in);
 extern "C" {
 #endif
 void bitSetZeros(uint32_t *dst, uint8_t channel, int size);
+void bitSetOnes(uint32_t *dst, uint8_t channel, int size);
 void bitConverter(uint32_t *dst, uint8_t dstBit, uint8_t *data, int size);
 #ifdef __cplusplus
 }

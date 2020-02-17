@@ -38,10 +38,21 @@ union b32 {
 void bitSetZeros(uint32_t *dst, uint8_t channel, int numBlocks) {
 	uint32_t *o0 = dst;
 	uint32_t *o1 = dst + numBlocks;
-	uint32_t mask = bitMasks[channel];
+	const uint32_t mask = bitMasks[channel];
 	while (numBlocks--) {
 		*o0++ &= mask;
 		*o1++ &= mask;
+	}
+}
+
+//assumes 8 byte blocks, size in 8 byte blocks
+void bitSetOnes(uint32_t *dst, uint8_t channel, int numBlocks) {
+	uint32_t *o0 = dst;
+	uint32_t *o1 = dst + numBlocks;
+	const uint32_t mask = ~bitMasks[channel];
+	while (numBlocks--) {
+		*o0++ |= mask;
+		*o1++ |= mask;
 	}
 }
 
