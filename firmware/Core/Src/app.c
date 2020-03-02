@@ -5,6 +5,13 @@
 volatile unsigned long ms;
 volatile unsigned long lastDataMs;
 
+
+
+//with uart dma, 12 cycles of jitter = 188ns
+//with uart dma and cpu w/ nops, 17 cycles. = 265ns
+//with uart dma and cpu w/o nops, 20 cycles. = 312ns
+
+
 //uart -> dma -> circular buffer -> handleIncomming() -> bitBuffer (8 channels) -> dma + timers -> gpio
 
 //microsecond timer on tim4 (prescaler /64)
@@ -72,12 +79,12 @@ typedef struct {
 PBChannel channels[8];
 
 //single byte vars for DMA to GPIO
-const uint8_t ones = 0xff;
-const uint8_t zeros = 0x00;
+uint8_t ones = 0xff;
+//const uint8_t zeros = 0x00;
 uint8_t ws2812StartBits = 0;
 uint8_t apa102ClockBits = 0;
 
-uint8_t drawingBusy; //set when we start drawing, cleared when dma xfer is complete
+volatile uint8_t drawingBusy; //set when we start drawing, cleared when dma xfer is complete
 volatile uint32_t lastDrawTimer; //to allow ws2812/13 to latch, set when dma xfer is complete
 
 static inline void ledOn() {
@@ -147,10 +154,12 @@ static inline void startDrawingChannles() {
 		switch (channels[ch].type) {
 		case SET_CHANNEL_WS2812:
 			if (channels[ch].ws2812Channel.numElements) {
+#if 0
 				if (micros() - lastDrawTimer < 300) {
 					debugStats.overDraw++;
 					return;
 				}
+#endif
 				//don't send start bits for disabled channels
 				ws2812StartBits |= 1<<ch;
 			}
@@ -184,8 +193,8 @@ static inline void startDrawingChannles() {
 		frequency = 800000;
 		TIM1->ARR = TIM2->ARR = 79; //64mhz / 800khz = 80
 		TIM1->CCR1 = 1; //ws2812 start bits
-		TIM1->CCR3 = 17; //triggers data + zeros clocks
-		TIM1->CCR4 = 52; //ws2812 stop bits
+		TIM1->CCR3 = 16; //triggers data + zeros clocks
+		TIM1->CCR4 = 56; //ws2812 stop bits
 		TIM2->CCR2 = 57; //sets clock high to latch
 //	} else {
 //		int reload = (SystemCoreClock / frequency) - 1;
@@ -232,6 +241,9 @@ static inline void startDrawingChannles() {
 
 	LL_TIM_EnableCounter(TIM1);
 	LL_TIM_EnableCounter(TIM3);
+
+//	__WFI();
+
 }
 
 void drawingComplete() {
@@ -260,7 +272,7 @@ void sysTickIsr() {
 
 //anything not already initialized by the generated LL drivers
 void setup() {
-	LL_SYSTICK_EnableIT();
+//	LL_SYSTICK_EnableIT();
 
 	//stop everything when debugging
 	DBGMCU->CR = DBGMCU_CR_DBG_IWDG_STOP | DBGMCU_CR_DBG_WWDG_STOP
@@ -310,7 +322,7 @@ void setup() {
 	LL_TIM_EnableCounter(TIM2);
 
 	//tim4 is used for micros() timebase
-	LL_TIM_EnableIT_UPDATE(TIM4);
+//	LL_TIM_EnableIT_UPDATE(TIM4);
 	LL_TIM_EnableCounter(TIM4);
 }
 
