@@ -4,8 +4,8 @@
 #include "app.h"
 
 
-#define NOPHACK __NOP(); __NOP(); __NOP()
-//#define NOPHACK
+//#define NOPHACK __NOP(); __NOP(); __NOP()
+#define NOPHACK
 
 #define B0_ZERO_MASK 0b11111110111111101111111011111110
 #define B1_ZERO_MASK 0b11111101111111011111110111111101

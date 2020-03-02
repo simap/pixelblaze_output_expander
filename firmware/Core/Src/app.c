@@ -85,7 +85,7 @@ uint8_t ws2812StartBits = 0;
 uint8_t apa102ClockBits = 0;
 
 volatile uint8_t drawingBusy; //set when we start drawing, cleared when dma xfer is complete
-volatile uint32_t lastDrawTimer; //to allow ws2812/13 to latch, set when dma xfer is complete
+//volatile uint32_t lastDrawTimer; //to allow ws2812/13 to latch, set when dma xfer is complete
 
 static inline void ledOn() {
 	GPIOC->BSRR |= GPIO_ODR_ODR15;
@@ -102,7 +102,7 @@ volatile struct {
 	uint16_t overDraw;
 } debugStats;
 
-volatile uint8_t ledBrightness;
+//volatile uint8_t ledBrightness;
 
 //3 pins have cuttable jumpers that create an ID on a bus, bits 3-5 of the channel
 static inline uint8_t getBusId() {
@@ -116,28 +116,21 @@ static inline uint8_t getBusId() {
 	return busId;
 }
 
+static inline void startWs2812LatchTimer() {
+	TIM4->ARR = 300;
+	LL_TIM_EnableCounter(TIM4);
+}
+
+static inline int isWs2812LatchTimerRunning() {
+	return LL_TIM_IsEnabledCounter(TIM4);
+}
+
+
 static inline void startDrawingChannles() {
 	if (drawingBusy) {
 		debugStats.overDraw++;
 		return;
 	}
-
-	//see if any channels are ws2812, if so make sure 300us has elapsed for latch
-//	for (int ch = 0; ch < 8; ch++) {
-//		if (channels[ch].type == SET_CHANNEL_WS2812) {
-//			if (micros() - lastDrawTimer < 300) {
-//				debugStats.overDraw++;
-//				return;
-//			}
-//		}
-//	}
-
-	//don't overdraw, and wait at least 300us to latch (use ws2813 timing)
-//	if (drawingBusy || micros() - lastDrawTimer < 300) {
-//		debugStats.overDraw++;
-//		return;
-//	}
-
 
 	//loop through all channels looking for:
 	//  * the max bytes any channel wants to send and calculate TIM3 target and update dma xfer CNDTR
@@ -154,12 +147,10 @@ static inline void startDrawingChannles() {
 		switch (channels[ch].type) {
 		case SET_CHANNEL_WS2812:
 			if (channels[ch].ws2812Channel.numElements) {
-#if 0
-				if (micros() - lastDrawTimer < 300) {
+				if (isWs2812LatchTimerRunning()) {
 					debugStats.overDraw++;
 					return;
 				}
-#endif
 				//don't send start bits for disabled channels
 				ws2812StartBits |= 1<<ch;
 			}
@@ -248,27 +239,26 @@ static inline void startDrawingChannles() {
 
 void drawingComplete() {
 	drawingBusy = 0; //technically only data xfer is done, but we are still going to clear the last bit when tim1 cc3 fires
-	lastDrawTimer = micros();
+	startWs2812LatchTimer();
 //	ledOff();
 }
 
 
-void sysTickIsr() {
-	ms++;
-
-	if (ms - lastDataMs < 1000)
-		ledBrightness = 1;
-	else
-		ledBrightness = 0;
-
-	uint8_t cr = ms & 0x3;
-	if (cr == 0 && ledBrightness) {
-		ledOn();
-	} else if (ledBrightness < cr) {
-		ledOff();
-	}
-}
-
+//void sysTickIsr() {
+//	ms++;
+//
+//	if (ms - lastDataMs < 1000)
+//		ledBrightness = 1;
+//	else
+//		ledBrightness = 0;
+//
+//	uint8_t cr = ms & 0x3;
+//	if (cr == 0 && ledBrightness) {
+//		ledOn();
+//	} else if (ledBrightness < cr) {
+//		ledOff();
+//	}
+//}
 
 //anything not already initialized by the generated LL drivers
 void setup() {
@@ -321,9 +311,6 @@ void setup() {
 	LL_TIM_EnableCounter(TIM1);
 	LL_TIM_EnableCounter(TIM2);
 
-	//tim4 is used for micros() timebase
-//	LL_TIM_EnableIT_UPDATE(TIM4);
-	LL_TIM_EnableCounter(TIM4);
 }
 
 // this is the main uart scan function. It ignores data until the magic UPLX string is seen
@@ -351,6 +338,7 @@ static inline void handleIncomming() {
 				channel = 0xff;
 			} else {
 				channel = 7 - (channel & 7); //channel outputs are reverse numbered
+				ledOn();
 			}
 
 			uint8_t or = ch.or;
@@ -378,6 +366,7 @@ static inline void handleIncomming() {
 			volatile uint32_t crcRead;
 			uartRead((void *) &crcRead, sizeof(crcRead));
 
+			ledOff();
 			if (channel < 8) {
 				int blocksToZero;
 				if (crcExpected == crcRead) {
@@ -437,6 +426,7 @@ static inline void handleIncomming() {
 				channel = 0xff;
 			} else {
 				channel = 7 - (channel & 7); //channel outputs are reverse numbered
+				ledOn();
 			}
 
 			uint8_t or = ch.or;
@@ -468,6 +458,7 @@ static inline void handleIncomming() {
 			volatile uint32_t crcRead;
 			uartRead((void *) &crcRead, sizeof(crcRead));
 
+			ledOff();
 			if (channel < 8) {
 				int blocksToZero;
 				if (crcExpected == crcRead) {
@@ -513,12 +504,14 @@ static inline void handleIncomming() {
 				channel = 0xff;
 			} else {
 				channel = 7 - (channel & 7); //channel outputs are reverse numbered
+				ledOn();
 			}
 
 			volatile uint32_t crcExpected = uartGetCrc();
 			volatile uint32_t crcRead;
 			uartRead((void *) &crcRead, sizeof(crcRead));
 
+			ledOff();
 			if (channel < 8) {
 				int blocksToZero;
 				if (crcExpected == crcRead) {

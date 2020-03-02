@@ -57,7 +57,6 @@ extern volatile unsigned long ms;
 extern void drawingComplete();
 extern volatile uint32_t microsOverflow;
 extern void uartIsr();
-extern void sysTickIsr();
 
 /* USER CODE END 0 */
 
@@ -188,9 +187,7 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
-
-	sysTickIsr();
-
+	HardFault_Handler();
   /* USER CODE END SysTick_IRQn 0 */
   
   /* USER CODE BEGIN SysTick_IRQn 1 */
@@ -303,8 +300,6 @@ void DMA1_Channel7_IRQHandler(void)
 void TIM4_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM4_IRQn 0 */
-	microsOverflow++;
-	CLEAR_BIT(TIM4->SR, TIM_SR_UIF);
 
   /* USER CODE END TIM4_IRQn 0 */
   /* USER CODE BEGIN TIM4_IRQn 1 */
