@@ -313,7 +313,7 @@ void setup() {
 
 }
 
-// this is the main uart scan function. It ignores data until the magic UPLX string is seen
+// this is the main uart scan function. It ignores data until the magic UPXL string is seen
 static inline void handleIncomming() {
 	uartResetCrc();
 	//look for the 4 byte magic header sequence
