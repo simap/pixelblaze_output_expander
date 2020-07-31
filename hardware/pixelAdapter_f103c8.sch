@@ -7300,13 +7300,10 @@ part number 2062-2P from STA</description>
 <part name="U2" library="Microchip_By_element14_Batch_1" deviceset="MCP1700T-3302E/TT" device="" value="AP2120N-3.3TRG1"/>
 <part name="GND2" library="supply1" deviceset="GND" device=""/>
 <part name="SUPPLY2" library="SparkFun-PowerSymbols" library_urn="urn:adsk.eagle:library:530" deviceset="5V" device=""/>
-<part name="+3V5" library="supply1" deviceset="+3V3" device=""/>
-<part name="GND6" library="supply1" deviceset="GND" device=""/>
 <part name="C3" library="SparkFun-Capacitors" library_urn="urn:adsk.eagle:library:510" deviceset="0.1UF" device="-0603-25V-(+80/-20%)" package3d_urn="urn:adsk.eagle:package:37414/1" value="0.1uF"/>
 <part name="JP1" library="SparkFun-Jumpers" library_urn="urn:adsk.eagle:library:528" deviceset="JUMPER-SMT_2_NC_TRACE" device="_SILK" package3d_urn="urn:adsk.eagle:package:39281/1"/>
 <part name="J2" library="SparkFun-Connectors" library_urn="urn:adsk.eagle:library:513" deviceset="CONN_08X2" device="" package3d_urn="urn:adsk.eagle:package:38152/1"/>
 <part name="GND1" library="supply1" deviceset="GND" device=""/>
-<part name="SUPPLY3" library="SparkFun-PowerSymbols" library_urn="urn:adsk.eagle:library:530" deviceset="5V" device=""/>
 <part name="TP1" library="testpad" library_urn="urn:adsk.eagle:library:385" deviceset="TP" device="TP20SQ" package3d_urn="urn:adsk.eagle:package:27980/1"/>
 <part name="TP2" library="testpad" library_urn="urn:adsk.eagle:library:385" deviceset="TP" device="TP20SQ" package3d_urn="urn:adsk.eagle:package:27980/1"/>
 <part name="TP3" library="testpad" library_urn="urn:adsk.eagle:library:385" deviceset="TP" device="TP20SQ" package3d_urn="urn:adsk.eagle:package:27980/1"/>
@@ -7398,12 +7395,6 @@ part number 2062-2P from STA</description>
 <instance part="SUPPLY2" gate="G$1" x="91.44" y="48.26" smashed="yes" rot="MR0">
 <attribute name="VALUE" x="91.44" y="51.054" size="1.778" layer="96" rot="MR0" align="bottom-center"/>
 </instance>
-<instance part="+3V5" gate="G$1" x="33.02" y="58.42" smashed="yes">
-<attribute name="VALUE" x="30.48" y="53.34" size="1.778" layer="96" rot="R90"/>
-</instance>
-<instance part="GND6" gate="1" x="33.02" y="45.72" smashed="yes">
-<attribute name="VALUE" x="30.48" y="43.18" size="1.778" layer="96"/>
-</instance>
 <instance part="C3" gate="G$1" x="60.96" y="81.28" smashed="yes">
 <attribute name="NAME" x="62.484" y="84.201" size="1.778" layer="95" font="vector"/>
 <attribute name="VALUE" x="62.484" y="79.121" size="1.778" layer="96" font="vector"/>
@@ -7417,9 +7408,6 @@ part number 2062-2P from STA</description>
 </instance>
 <instance part="GND1" gate="1" x="170.18" y="15.24" smashed="yes" rot="MR0">
 <attribute name="VALUE" x="172.72" y="12.7" size="1.778" layer="96" rot="MR0"/>
-</instance>
-<instance part="SUPPLY3" gate="G$1" x="99.06" y="73.66" smashed="yes" rot="MR0">
-<attribute name="VALUE" x="99.06" y="76.454" size="1.778" layer="96" rot="MR0" align="bottom-center"/>
 </instance>
 <instance part="TP1" gate="G$1" x="10.16" y="43.18" smashed="yes" rot="R90">
 <attribute name="NAME" x="8.89" y="41.91" size="1.778" layer="95" rot="R90"/>
@@ -7550,11 +7538,6 @@ part number 2062-2P from STA</description>
 <wire x1="30.48" y1="139.7" x2="30.48" y2="144.78" width="0.1524" layer="91"/>
 </segment>
 <segment>
-<pinref part="GND6" gate="1" pin="GND"/>
-<wire x1="33.02" y1="48.26" x2="38.1" y2="48.26" width="0.1524" layer="91"/>
-<wire x1="38.1" y1="40.64" x2="38.1" y2="48.26" width="0.1524" layer="91"/>
-</segment>
-<segment>
 <pinref part="GND2" gate="1" pin="GND"/>
 <wire x1="101.6" y1="58.42" x2="96.52" y2="58.42" width="0.1524" layer="91"/>
 <pinref part="U1" gate="A" pin="OE"/>
@@ -7655,14 +7638,6 @@ part number 2062-2P from STA</description>
 <pinref part="TP4" gate="G$1" pin="TP"/>
 </segment>
 <segment>
-<pinref part="+3V5" gate="G$1" pin="+3V3"/>
-<wire x1="33.02" y1="50.8" x2="33.02" y2="53.34" width="0.1524" layer="91"/>
-<wire x1="33.02" y1="53.34" x2="33.02" y2="55.88" width="0.1524" layer="91"/>
-<wire x1="38.1" y1="50.8" x2="33.02" y2="50.8" width="0.1524" layer="91"/>
-<wire x1="38.1" y1="53.34" x2="33.02" y2="53.34" width="0.1524" layer="91"/>
-<junction x="33.02" y="53.34"/>
-</segment>
-<segment>
 <pinref part="+3V1" gate="G$1" pin="+3V3"/>
 <pinref part="U$1" gate="G$1" pin="VDDA"/>
 <wire x1="48.26" y1="137.16" x2="48.26" y2="132.08" width="0.1524" layer="91"/>
@@ -7702,10 +7677,6 @@ part number 2062-2P from STA</description>
 <wire x1="91.44" y1="45.72" x2="91.44" y2="17.78" width="0.1524" layer="91"/>
 <wire x1="91.44" y1="17.78" x2="96.52" y2="17.78" width="0.1524" layer="91"/>
 <junction x="91.44" y="45.72"/>
-</segment>
-<segment>
-<pinref part="SUPPLY3" gate="G$1" pin="5V"/>
-<wire x1="99.06" y1="73.66" x2="91.44" y2="73.66" width="0.1524" layer="91"/>
 </segment>
 <segment>
 <pinref part="SUPPLY4" gate="G$1" pin="5V"/>
