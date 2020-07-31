@@ -9961,8 +9961,6 @@ CONN_03
 <part name="U2" library="Microchip_By_element14_Batch_1" deviceset="MCP1700T-3302E/TT" device="" value="AP2120N-3.3TRG1"/>
 <part name="GND2" library="supply1" deviceset="GND" device=""/>
 <part name="SUPPLY2" library="SparkFun-PowerSymbols" library_urn="urn:adsk.eagle:library:530" deviceset="5V" device=""/>
-<part name="+3V5" library="supply1" deviceset="+3V3" device=""/>
-<part name="GND6" library="supply1" deviceset="GND" device=""/>
 <part name="C3" library="SparkFun-Capacitors" library_urn="urn:adsk.eagle:library:510" deviceset="0.1UF" device="-0603-25V-(+80/-20%)" package3d_urn="urn:adsk.eagle:package:37414/1" value="0.1uF"/>
 <part name="GND1" library="supply1" deviceset="GND" device=""/>
 <part name="TP1" library="testpad" library_urn="urn:adsk.eagle:library:385" deviceset="TP" device="TP20SQ" package3d_urn="urn:adsk.eagle:package:27980/1"/>
@@ -10075,12 +10073,6 @@ CONN_03
 </instance>
 <instance part="SUPPLY2" gate="G$1" x="91.44" y="48.26" smashed="yes" rot="MR0">
 <attribute name="VALUE" x="91.44" y="51.054" size="1.778" layer="96" rot="MR0" align="bottom-center"/>
-</instance>
-<instance part="+3V5" gate="G$1" x="33.02" y="58.42" smashed="yes">
-<attribute name="VALUE" x="30.48" y="53.34" size="1.778" layer="96" rot="R90"/>
-</instance>
-<instance part="GND6" gate="1" x="33.02" y="45.72" smashed="yes">
-<attribute name="VALUE" x="30.48" y="43.18" size="1.778" layer="96"/>
 </instance>
 <instance part="C3" gate="G$1" x="40.64" y="81.28" smashed="yes">
 <attribute name="NAME" x="42.164" y="84.201" size="1.778" layer="95" font="vector"/>
@@ -10304,11 +10296,6 @@ CONN_03
 <wire x1="30.48" y1="139.7" x2="30.48" y2="144.78" width="0.1524" layer="91"/>
 </segment>
 <segment>
-<pinref part="GND6" gate="1" pin="GND"/>
-<wire x1="33.02" y1="48.26" x2="38.1" y2="48.26" width="0.1524" layer="91"/>
-<wire x1="38.1" y1="40.64" x2="38.1" y2="48.26" width="0.1524" layer="91"/>
-</segment>
-<segment>
 <pinref part="GND2" gate="1" pin="GND"/>
 <wire x1="101.6" y1="58.42" x2="96.52" y2="58.42" width="0.1524" layer="91"/>
 <pinref part="U1" gate="A" pin="OE"/>
@@ -10449,14 +10436,6 @@ CONN_03
 <wire x1="12.7" y1="35.56" x2="15.24" y2="35.56" width="0.1524" layer="91"/>
 <label x="15.24" y="35.56" size="1.778" layer="95"/>
 <pinref part="TP4" gate="G$1" pin="TP"/>
-</segment>
-<segment>
-<pinref part="+3V5" gate="G$1" pin="+3V3"/>
-<wire x1="33.02" y1="50.8" x2="33.02" y2="53.34" width="0.1524" layer="91"/>
-<wire x1="33.02" y1="53.34" x2="33.02" y2="55.88" width="0.1524" layer="91"/>
-<wire x1="38.1" y1="50.8" x2="33.02" y2="50.8" width="0.1524" layer="91"/>
-<wire x1="38.1" y1="53.34" x2="33.02" y2="53.34" width="0.1524" layer="91"/>
-<junction x="33.02" y="53.34"/>
 </segment>
 <segment>
 <pinref part="+3V1" gate="G$1" pin="+3V3"/>
