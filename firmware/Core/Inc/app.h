@@ -3,8 +3,9 @@
 
 
 #include <stdint.h>
+#include "sintable.h"
 
-#define UART_BUF_SIZE 128
+#define UART_BUF_SIZE 8192
 
 void setup();
 void loop() ;
@@ -40,10 +41,5 @@ void uartRead(void *dst, int size);
 uint8_t uartGetc();
 int uartAvailable();
 
-
-uint32_t micros();
-static inline uint16_t microsFast() {
-	return TIM4->CNT;
-}
 
 #endif

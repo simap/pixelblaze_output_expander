@@ -7,7 +7,7 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2019 STMicroelectronics.
+  * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
   * All rights reserved.</center></h2>
   *
   * This software component is licensed by ST under BSD 3-Clause license,
@@ -28,18 +28,21 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f1xx_ll_dma.h"
-#include "stm32f1xx_ll_rcc.h"
-#include "stm32f1xx_ll_bus.h"
-#include "stm32f1xx_ll_system.h"
-#include "stm32f1xx_ll_exti.h"
-#include "stm32f1xx_ll_cortex.h"
-#include "stm32f1xx_ll_utils.h"
-#include "stm32f1xx_ll_pwr.h"
-#include "stm32f1xx_ll_tim.h"
-#include "stm32f1xx_ll_usart.h"
-#include "stm32f1xx.h"
-#include "stm32f1xx_ll_gpio.h"
+#include "stm32l4xx_ll_crc.h"
+#include "stm32l4xx_ll_dma.h"
+#include "stm32l4xx_ll_lptim.h"
+#include "stm32l4xx_ll_crs.h"
+#include "stm32l4xx_ll_rcc.h"
+#include "stm32l4xx_ll_bus.h"
+#include "stm32l4xx_ll_system.h"
+#include "stm32l4xx_ll_exti.h"
+#include "stm32l4xx_ll_cortex.h"
+#include "stm32l4xx_ll_utils.h"
+#include "stm32l4xx_ll_pwr.h"
+#include "stm32l4xx_ll_spi.h"
+#include "stm32l4xx_ll_tim.h"
+#include "stm32l4xx_ll_usart.h"
+#include "stm32l4xx_ll_gpio.h"
 
 #if defined(USE_FULL_ASSERT)
 #include "stm32_assert.h"

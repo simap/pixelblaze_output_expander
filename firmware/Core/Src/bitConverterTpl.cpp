@@ -4,9 +4,6 @@
 #include "app.h"
 
 
-//#define NOPHACK __NOP(); __NOP(); __NOP()
-#define NOPHACK
-
 #define B0_ZERO_MASK 0b11111110111111101111111011111110
 #define B1_ZERO_MASK 0b11111101111111011111110111111101
 #define B2_ZERO_MASK 0b11111011111110111111101111111011
@@ -67,9 +64,7 @@ void bitConverterT(register uint32_t *dst, register uint8_t *data, register int 
 	o1 = (union b32*) dst+1;
 	register uint8_t in;
 	while (size--) {
-		NOPHACK;
 		in = *data++;
-		NOPHACK;
 		switch (C) {
 		case 0:
 			o1->p0d = in;
@@ -154,11 +149,8 @@ void bitConverterT(register uint32_t *dst, register uint8_t *data, register int 
 		default:
 			break;
 		}
-		NOPHACK;
 		o0 += 2;
-		NOPHACK;
 		o1 += 2;
-		NOPHACK;
 	}
 }
 #ifdef __cplusplus
