@@ -2,88 +2,91 @@
 #include "app.h"
 #include <string.h>
 
-volatile unsigned long ms;
-volatile unsigned long lastDataMs;
-volatile unsigned long lastValidChannelMs;
-volatile unsigned long lastDrawMs;
-
-
-//uart -> dma -> circular buffer -> handleIncomming() -> bitBuffer (8 channels) -> dma + timers -> gpio
-
-
-//stm32l432 @ 80mhz benchmark reading byte data, doing crc, and stuffing bits
-//    crc in software: 376k bytes/sec.
-//    crc in hardware: 432k bytes/sec. over 4M baud! Could double data rate from previous expanders!
-
-
-//tim1 has 4 periods w/ dma triggers to set start bits, data bits, clock bits, and clear bits
-//tim1 uses all 4 channels to drive CC events to DMA for generating the output signals
-//    period: 99 (80mhz / 100 = 800khz)
-//    no prescaler
-
-//for ws2812, timers fire in this sequence:
-//    tim1ch1 -> dma1ch2: ws2812StartBits controls the start of the pulse
-//    tim1ch3 -> dma1ch7: then data bits clear it or keep it high, ending short 0 bits
-//    tim1ch4 -> dma1ch4: then ws2812StartBits clears any channel, ending long 1 bits
-
-//for apa102, data timers fire in this sequence:
-//    tim1ch3 -> dma1ch7: data bits set the data line. easy!
-
-//for apa102, clock timers fire in this sequence:
-//    tim1ch3 -> dma1ch7: data bits having been zeroed, this always lowers clock line
-//    tim1ch2 -> dma1ch3: then apa102ClockBits sets channel high, causing data to latch on LEDs.
-
-//tim15 gates tim1 and period should be long enough for data to xfer
-//prescaler matches tim1 period, then number of bytes transfered matches count so they end at the same time
-//this turns off all DMA GPIO activity after the last cycle is done
-
-
-//tim16 runs at 1mhz, used for a microseconds timer for WS2812 latching
-//    prescaler: 79 (80mhz / 80 = 1mhz)
-// 	  one shot mode
-// 	  set ARR and enable
-
-//tim2 and lptim2 provide status LED PWM channels
-
-//tim2 runs at 80mhz, used for LED PWM
-//    period: 65535 (1220.7Hz with 16 bits PWM)
-// 	  prescaler: 0
-//    tim2ch1 -> PA15 -> "Status" orange LED 
-
-
-//lptim2 runs at 80mhz, used for LED PWM
-//    no prescaler
-//    period
-//    lptim2 -> PA8 -> "Draw" green LED 
-
-
-//it would be hard to untangle ws2812 and apa102 as they would be writing to the same port at different times,
-//so if both are enabled speed is set at 800khz.
-//otherwise, apa102 can set the speed. I want the protocol to support per-channel settings, but the board
-//will be limited to one speed. last speed wins? lowest/safest speed?
-
-//for apa102 clock, start bits are cleared, data is zeroed out so when it copies it will toggle clock low (via tim1 data trigger)
-//tim1ch2 has a dma trigger to set clocks high (like start bits, but for clocks) half a period after data is set
-//each clock channel needed a bit position anyway.
-
-//apa102 needs a start and end frame, better to write these in memory and not require it in the protocol, borrowing 2 pixels of data
-
-
-#define BYTES_PER_CHANNEL 4808 //800 RGB or 600 RGBW/HDR, a little extra for apa102 start/end frame
-#define BYTES_TOTAL (BYTES_PER_CHANNEL * 8)
-uint32_t bitBuffer[BYTES_PER_CHANNEL * 2];
-
-#define STATUS_LED_BRIGHTNESS 0x7ff
-#define DRAW_LED_BRIGHTNESS 0x3ff
-
-// These vars and data structures are left for reference:
-//const static char MAGIC[] = { "UPXL" }; //starts with 0x55, good for auto baud rate detection
-// frame headers look like this:
-//typedef struct {
-//	int8_t magic[4]; //"UPXL"
-//	uint8_t channel;
-//	uint8_t recordType; //set channel ws2812 opts+data, draw all
-//} PBFrameHeader;
+/*
+ * Pixelblaze Output Expander
+ *
+ * This controller accepts pixel and configuration data over serial and
+ * outputs WS2812 and APA102 across 8 channels.
+ *
+ * The basic data path looks like this:
+ * uart -> dma -> circular buffer -> handleIncomming() -> bitBuffer (8 channels) -> dma + timers -> gpio
+ *
+ *
+ * stm32l432 @ 80mhz benchmark reading byte data, doing crc, and stuffing bits
+ *    crc in software: 376k bytes/sec.
+ *    crc in hardware: 432k bytes/sec. over 4M baud! Could double data rate from previous expanders!
+ *
+ *
+ * tim1 has 4 periods w/ dma triggers to set start bits, data bits, clock bits, and clear bits
+ * tim1 uses all 4 channels to drive CC events to DMA for generating the output signals
+ *    period: 99 (80mhz / 100 = 800khz)
+ *    no prescaler
+ *
+ * for ws2812, timers fire in this sequence:
+ *    tim1ch1 -> dma1ch2: ws2812StartBits controls the start of the pulse
+ *    tim1ch3 -> dma1ch7: then data bits clear it or keep it high, ending short 0 bits
+ *    tim1ch4 -> dma1ch4: then ws2812StartBits clears any channel, ending long 1 bits
+ *
+ * for apa102, data timers fire in this sequence:
+ *    tim1ch3 -> dma1ch7: data bits set the data line. easy!
+ *
+ * for apa102, clock timers fire in this sequence:
+ *    tim1ch3 -> dma1ch7: data bits having been zeroed, this always lowers clock line
+ *    tim1ch2 -> dma1ch3: then apa102ClockBits sets channel high, causing data to latch on LEDs.
+ *
+ * tim15 gates tim1 and period should be long enough for data to xfer
+ * prescaler matches tim1 period, then number of bytes transfered matches count so they end at the same time
+ * this turns off all DMA GPIO activity after the last cycle is done
+ *
+ *
+ * tim16 runs at 1mhz, used for a microseconds timer for WS2812 latching
+ *    prescaler: 79 (80mhz / 80 = 1mhz)
+ * 	  one shot mode
+ * 	  set ARR and enable
+ *
+ * tim2 and lptim2 provide status LED PWM channels
+ *
+ * tim2 runs at 80mhz, used for LED PWM
+ *    period: 65535 (1220.7Hz with 16 bits PWM)
+ * 	  prescaler: 0
+ *    tim2ch1 -> PA15 -> "Status" orange LED
+ *
+ * lptim2 runs at 80mhz, used for LED PWM
+ *    no prescaler
+ *    period 65535
+ *    lptim2 -> PA8 -> "Draw" green LED
+ *
+ *
+ *
+ * The protocol starts with a magic sequence, channel, and record type
+ *
+ * These vars and data structures are for reference:
+ * const static char MAGIC[] = { "UPXL" }; //starts with 0x55, good for auto baud rate detection
+ * frame headers look like this:
+ * typedef struct {
+ * 	int8_t magic[4]; //"UPXL"
+ * 	uint8_t channel;
+ * 	uint8_t recordType; //set channel ws2812 opts+data, draw all
+ * } PBFrameHeader;
+ *
+ * following this is a frame of the record type, optional payload data, and finished with a
+ * CRC32 of the entire thing (up to and including magic)
+ *
+ *
+ * The protocol allows specifying output data rates, however it would be hard to
+ * untangle ws2812 and apa102 as they would be writing to the same port at different times,
+ *
+ * It would be possible to let apa102 set the speed when used without WS2812, but this is not implemented.
+ * Output speed is fixed at 800KHz.
+ *
+ * for apa102 clock, start bits are cleared, data is zeroed out so when it copies it will toggle clock low (via tim1 data trigger)
+ * tim1ch2 has a dma trigger to set clocks high (like start bits, but for clocks) half a period after data is set
+ * storing a bunch of zeros is kind of a waste, but each clock channel reserves a position in the bitBuffer anyway.
+ *
+ * apa102 needs a start and end frame, better to write these in memory and not require it in the protocol, borrowing 2 pixels of data
+ *
+ *
+ */
 
 enum RecordType {
 	SET_CHANNEL_WS2812 = 1, DRAW_ALL, SET_CHANNEL_APA102_DATA, SET_CHANNEL_APA102_CLOCK
@@ -117,13 +120,20 @@ typedef struct {
 
 PBChannel channels[8];
 
+
+volatile unsigned long ms;
+volatile unsigned long lastDataMs;
+volatile unsigned long lastValidChannelMs;
+volatile unsigned long lastDrawMs;
+
+uint32_t bitBuffer[BYTES_PER_CHANNEL * 2];
+
 //single byte vars for DMA to GPIO
 uint8_t ones = 0xff;
 uint8_t ws2812StartBits = 0;
 uint8_t apa102ClockBits = 0;
 
 volatile uint8_t drawingBusy; //set when we start drawing, cleared when dma xfer is complete
-//volatile uint32_t lastDrawTimer; //to allow ws2812/13 to latch, set when dma xfer is complete
 
 
 static inline void setStatusLedBrightness(uint16_t v) {
@@ -143,7 +153,6 @@ volatile struct {
 	uint16_t overDraw;
 } debugStats;
 
-//volatile uint8_t ledBrightness;
 
 //3 pins have cuttable jumpers that create an ID on a bus, bits 3-5 of the channel
 static inline uint8_t getBusId() {
@@ -158,6 +167,17 @@ static inline uint8_t getBusId() {
 	return busId;
 }
 
+//given a frame's channel, check it against our busID
+//return 0xff if mismatch, otherwise remapped channel (reversed)
+uint8_t remapFrameChannel(uint8_t channel) {
+	if (channel >> 3 != getBusId()) {
+		return 0xff; //mismatch
+	} else {
+		return 7 - (channel & 7); //channel outputs are reversed
+	}
+}
+
+//we start this one-shot timer to know when ws2812s (and ws2813s) have latched.
 static inline void startWs2812LatchTimer() {
 	TIM16->ARR = 300;
 	TIM16->CNT = 0;
@@ -176,7 +196,7 @@ static inline void startDrawingChannles() {
 	}
 
 	//loop through all channels looking for:
-	//  * the max bytes any channel wants to send and calculate TIM3 target and update dma xfer CNDTR
+	//  * the max bytes any channel wants to send and calculate TIM15 target and update dma xfer CNDTR
 	//    otherwise FPS is capped based on theoretical max bytes. was less of a problem when there was 720 bytes
 	//  * if any channel is ws2812 and latch time isn't done, then stop now
 	//  * set the ws2812StartBits for enabled ws2812 channels
@@ -220,31 +240,17 @@ static inline void startDrawingChannles() {
 		}
 	}
 
-//	frequency = 2000000;
-//
-//	//ws2812 clock overrides anything else
-//	if (ws2812StartBits || frequency <= 0) {
-		frequency = 800000;
-		TIM1->ARR = 99; //80mhz / 800khz = 100
-		TIM1->CCR1 = 4; //ws2812 start bits - this offset seems to produce the least jitter. gives bus time to free up
-		TIM1->CCR3 = TIM1->CCR1 + 19; //triggers data + zeros clocks. + 237.5ns
-		TIM1->CCR4 = TIM1->CCR3 + 50; //ws2812 stop bits +625ns
-		TIM1->CCR2 = TIM1->CCR3 + 50; //sets clock high to latch 50% after data. trigger at same time and let DMA priority handle it.
 
-//	} else {
-//		int reload = (SystemCoreClock / frequency) - 1;
-//		if (reload < 4)
-//			reload = 4;
-//		TIM1->ARR = TIM2->ARR = reload;
-//		TIM1->CCR1 = 2; //does this fire?
-//		TIM1->CCR3 = 1; //triggers data + zeros clocks
-//		TIM1->CCR4 = 3; //does this fire?
-//		TIM2->CCR2 = TIM1->ARR>>1; //sets clock high to latch
-//	}
+	frequency = 800000; //fixed at 800khz for now
+	TIM1->ARR = 99; //80mhz / 800khz = 100
+	TIM1->CCR1 = 4; //ws2812 start bits - this offset seems to produce the least jitter. gives bus time to free up
+	TIM1->CCR3 = TIM1->CCR1 + 24; //triggers data + zeros clocks. 0s chop pulse to 300ns
+	TIM1->CCR4 = TIM1->CCR1 + 56; //ws2812 stop bits for 1s 700ns
+	TIM1->CCR2 = TIM1->CCR3 + 50; //sets clock high to latch 50% after data. trigger at same time and let DMA priority handle it.
 
 	int maxBits = maxBytes *8;
 
-	//all channels have length of zero!
+	//check for all channels with zero data!
 	if (maxBits == 0)
 		return;
 
@@ -254,11 +260,7 @@ static inline void startDrawingChannles() {
 	drawingBusy = 1;
 
 	// tim15's prescaler matches tim1's cycle so each increment of tim15 is one bit-time
-//	TIM15->PSC = TIM1->ARR;
 	TIM15->ARR = maxBits;
-
-//	LL_TIM_DisableCounter(TIM1);
-//	TIM1->CNT = 0; //for some reason, tim1 doesnt restart properly unless cleared.
 
 	//OK this is a bit weird, there's some kind of pending DMA request that will transfer immediately and shift bits by one
 	//set it up to write a zero, then set it up again
@@ -280,17 +282,17 @@ static inline void startDrawingChannles() {
 	TIM1->CNT = 0; //for some reason, tim1 doesnt restart properly unless cleared.
 	LL_TIM_EnableCounter(TIM1);
 
-//	TIM15->CNT = 0;
 	LL_TIM_EnableCounter(TIM15);
 
 }
 
+//called when the dma xfer of bitBuffer (maxBits times) is complete.
 void drawingComplete() {
 	drawingBusy = 0; //technically only data xfer is done, but we are still going to clear the last bit when tim1 cc3 fires
 	startWs2812LatchTimer();
 }
 
-
+//keep track of milliseconds and update status/draw LED
 void sysTickIsr() {
 	ms++;
 	if (ms - lastDataMs < 1000)
@@ -330,7 +332,6 @@ void setup() {
 	DMA1_Channel7->CMAR = (uint32_t) &bitBuffer;
 	DMA1_Channel7->CPAR = (uint32_t) &GPIOA->ODR;
 	//enable later
-//	DMA1_Channel6->CCR |= DMA_CCR_EN; // | DMA_CCR_TCIE;
 
 	//fires with TIM1_CH4 - clears the ws2812 pulse
 	DMA1_Channel4->CMAR = (uint32_t) &ws2812StartBits;
@@ -350,7 +351,7 @@ void setup() {
 	LL_TIM_CC_SetDMAReqTrigger(TIM1, LL_TIM_CCDMAREQUEST_CC);
 
 
-	//NOTE: stm cube tool does not expose this ni the UI!
+	//NOTE: stm cube tool does not expose this in the UI!
 	LL_TIM_OC_SetMode(TIM15, LL_TIM_CHANNEL_CH1, LL_TIM_OCMODE_PWM2);
 	LL_TIM_EnableMasterSlaveMode(TIM15);
 
@@ -388,15 +389,8 @@ static inline void handleIncomming() {
 			if (ch.pixels * ch.numElements > BYTES_PER_CHANNEL)
 				return;
 
-			//check that it's one of ours
-			//TODO handle broadcast?
-			if (channel >> 3 != getBusId()) {
-				//follow along, but ignore data
-				channel = 0xff;
-			} else {
-				channel = 7 - (channel & 7); //channel outputs are reverse numbered
-//				ledOn();
-			}
+			//check that it's addressed to us and remap
+			channel = remapFrameChannel(channel);
 
 			uint8_t or = ch.or;
 			uint8_t og = ch.og;
@@ -423,7 +417,7 @@ static inline void handleIncomming() {
 			volatile uint32_t crcRead;
 			uartRead((void *) &crcRead, sizeof(crcRead));
 
-			if (channel < 8) {
+			if (channel < 8) { //check that it was addressed to us (not 0xff)
 				int blocksToZero;
 				if (crcExpected == crcRead) {
 					if (channels[channel].type == SET_CHANNEL_WS2812
@@ -475,15 +469,8 @@ static inline void handleIncomming() {
 			if ((ch.pixels+2) * 4 > BYTES_PER_CHANNEL)
 				return;
 
-			//check that it's one of ours
-			//TODO handle broadcast?
-			if (channel >> 3 != getBusId()) {
-				//follow along, but ignore data
-				channel = 0xff;
-			} else {
-				channel = 7 - (channel & 7); //channel outputs are reverse numbered
-//				ledOn();
-			}
+			//check that it's addressed to us and remap
+			channel = remapFrameChannel(channel);
 
 			uint8_t or = ch.or;
 			uint8_t og = ch.og;
@@ -514,7 +501,7 @@ static inline void handleIncomming() {
 			volatile uint32_t crcRead;
 			uartRead((void *) &crcRead, sizeof(crcRead));
 
-			if (channel < 8) {
+			if (channel < 8) { //check that it was addressed to us (not 0xff)
 				int blocksToZero;
 				if (crcExpected == crcRead) {
 					if (channels[channel].type == SET_CHANNEL_APA102_DATA
@@ -552,21 +539,14 @@ static inline void handleIncomming() {
 			if (ch.frequency == 0)
 				return;
 
-			//check that it's one of ours
-			//TODO handle broadcast?
-			if (channel >> 3 != getBusId()) {
-				//follow along, but ignore data
-				channel = 0xff;
-			} else {
-				channel = 7 - (channel & 7); //channel outputs are reverse numbered
-//				ledOn();
-			}
+			//check that it's addressed to us and remap
+			channel = remapFrameChannel(channel);
 
 			volatile uint32_t crcExpected = uartGetCrc();
 			volatile uint32_t crcRead;
 			uartRead((void *) &crcRead, sizeof(crcRead));
 
-			if (channel < 8) {
+			if (channel < 8) { //check that it was addressed to us (not 0xff)
 				int blocksToZero;
 				if (crcExpected == crcRead) {
 					if (channels[channel].type == SET_CHANNEL_APA102_CLOCK) {
@@ -594,8 +574,8 @@ static inline void handleIncomming() {
 			break;
 		}
 		default:
+			//unsupported frame type or garbage frame, just wait for the next one
 			break;
-			//unsupported op or garbage frame, just wait for the next one
 		}
 
 	} else {
@@ -607,35 +587,5 @@ void loop() {
 		if (uartAvailable() > 0) {
 			handleIncomming();
 		}
-
-//		//quick benchmark hack
-//		volatile uint32_t t1 = ms;
-//
-//
-//		int size = 800;
-//		int channel = ms & 3;
-//
-//
-//		uint8_t elements[4] = {0,0,0,0};
-//		uint32_t * dst = bitBuffer;
-//
-//		//start frame
-//		bitConverter(dst, channel, elements, 4);
-//		dst += 8;
-//
-//		for (int i = 0; i < size; i++) {
-//			elements[0] = uartGetc();
-//			elements[1] = uartGetc();
-//			elements[2] = uartGetc();
-//			elements[3] = uartGetc() | 0xe0;
-//			bitConverter(dst, channel, elements, 4);
-//			dst += 8;
-//		}
-//
-//
-//		volatile t2 = ms - t1;
-//
-//		t2;
-//		ms++;
 	}
 }

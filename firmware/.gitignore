@@ -1,4 +1,8 @@
 
 Debug/
-Release/
+Release/*
 .DS_Store
+
+!Release/outputexpander3.bin
+!Release/outputexpander3.elf
+
