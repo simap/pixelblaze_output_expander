@@ -7,6 +7,7 @@
 
 #define UART_BUF_SIZE 8192
 
+//WARNING: BYTES_PER_CHANNEL * 8 can't be more than 65535, the limit of timer/dma transfer sizes
 #define BYTES_PER_CHANNEL 4808 //1600 RGB or 1200 RGBW/HDR, a little extra for apa102 start/end frame
 
 #define STATUS_LED_BRIGHTNESS 0x7ff

@@ -248,10 +248,10 @@ static inline void startDrawingChannles() {
 	TIM1->CCR4 = TIM1->CCR1 + 56; //ws2812 stop bits for 1s 700ns
 	TIM1->CCR2 = TIM1->CCR3 + 50; //sets clock high to latch 50% after data. trigger at same time and let DMA priority handle it.
 
-	int maxBits = maxBytes *8;
+	uint32_t maxBits = maxBytes *8;
 
-	//check for all channels with zero data!
-	if (maxBits == 0)
+	//check for all channels with zero data, or overflow!
+	if (maxBits == 0 || maxBits > 0xffff)
 		return;
 
 	lastDrawMs = ms; //notice that we got a draw command with valid channels
