@@ -5,7 +5,11 @@
 #include <stdint.h>
 #include "sintable.h"
 
-#define UART_BUF_SIZE 8192
+#define UART_BUF_SIZE 0
+#define SPI_BUF_SIZE 8192*2
+#define USE_CRC 0
+#define SPI_TIMEOUT_MS 10
+
 
 //WARNING: BYTES_PER_CHANNEL * 8 can't be more than 65535, the limit of timer/dma transfer sizes
 #define BYTES_PER_CHANNEL 4808 //1600 RGB or 1200 RGBW/HDR, a little extra for apa102 start/end frame
@@ -39,13 +43,14 @@ void bitConverter(uint32_t *dst, uint8_t dstBit, uint8_t *data, int size);
 }
 #endif
 
-void uartIsr();
-void uartResetCrc();
-uint32_t uartGetCrc();
-void uartSetup();
-void uartRead(void *dst, int size);
-uint8_t uartGetc();
-int uartAvailable();
+void spiCheckTimeout();
+void spiIsr();
+void spiResetCrc();
+uint32_t spiGetCrc();
+void spiSetup();
+void spiRead(void *dst, int size);
+uint8_t spiGetc();
+int spiAvailable();
 
 
 #endif

@@ -126,6 +126,7 @@ volatile unsigned long lastDataMs;
 volatile unsigned long lastValidChannelMs;
 volatile unsigned long lastDrawMs;
 
+
 uint32_t bitBuffer[BYTES_PER_CHANNEL * 2];
 
 //single byte vars for DMA to GPIO
@@ -304,6 +305,11 @@ void sysTickIsr() {
 		setDrawLedBrightness(DRAW_LED_BRIGHTNESS);
 	else
 		setDrawLedBrightness(0);
+
+
+	//check on the SPI, see if we havent been seeing data
+	spiCheckTimeout();
+
 }
 
 //anything not already initialized by the generated LL drivers
@@ -315,7 +321,7 @@ void setup() {
 	DBGMCU->APB1FZR2 = 0xffffffff;
 	DBGMCU->APB2FZ = 0xffffffff;
 
-	uartSetup();
+	spiSetup();
 
 	//set up the 4 stages of DMA triggers on tim1 channels
 
@@ -372,17 +378,17 @@ void setup() {
 
 // this is the main uart scan function. It ignores data until the magic UPXL string is seen
 static inline void handleIncomming() {
-	uartResetCrc();
+	spiResetCrc();
 	//look for the 4 byte magic header sequence
-	if (uartGetc() == 'U' && uartGetc() == 'P' && uartGetc() == 'X' && uartGetc() == 'L') {
-		uint8_t channel = uartGetc();
-		uint8_t recordType = uartGetc();
+	if (spiGetc() == 'U' && spiGetc() == 'P' && spiGetc() == 'X' && spiGetc() == 'L') {
+		uint8_t channel = spiGetc();
+		uint8_t recordType = spiGetc();
 		lastDataMs = ms; //notice that we see some data
 		switch (recordType) {
 		case SET_CHANNEL_WS2812: {
 			//read in the header
 			PBWS2812Channel ch;
-			uartRead(&ch, sizeof(PBWS2812Channel));
+			spiRead(&ch, sizeof(PBWS2812Channel));
 
 			if (ch.numElements < 3 || ch.numElements > 4)
 				return;
@@ -402,21 +408,22 @@ static inline void handleIncomming() {
 			uint32_t * dst = bitBuffer;
 			int stride = 2*ch.numElements;
 			for (int i = 0; i < ch.pixels; i++) {
-				elements[or] = uartGetc();
-				elements[og] = uartGetc();
-				elements[ob] = uartGetc();
+				elements[or] = spiGetc();
+				elements[og] = spiGetc();
+				elements[ob] = spiGetc();
 				if (ch.numElements == 4) {
-					elements[ow] = uartGetc();
+					elements[ow] = spiGetc();
 				}
 				//this will ignore channel > 7
 				bitConverter(dst, channel, elements, ch.numElements);
 				dst += stride;
 			}
 
-			volatile uint32_t crcExpected = uartGetCrc();
-			volatile uint32_t crcRead;
-			uartRead((void *) &crcRead, sizeof(crcRead));
-
+			volatile uint32_t crcExpected = 0, crcRead = 0;
+#if USE_CRC
+			crcExpected = spiGetCrc();
+			spiRead((void *) &crcRead, sizeof(crcRead));
+#endif
 			if (channel < 8) { //check that it was addressed to us (not 0xff)
 				int blocksToZero;
 				if (crcExpected == crcRead) {
@@ -449,9 +456,11 @@ static inline void handleIncomming() {
 			break;
 		}
 		case DRAW_ALL: {
-			uint32_t crcExpected = uartGetCrc();
-			uint32_t crcRead;
-			uartRead(&crcRead, sizeof(crcRead));
+			volatile uint32_t crcExpected = 0, crcRead = 0;
+#if USE_CRC
+			crcExpected = spiGetCrc();
+			spiRead((void *) &crcRead, sizeof(crcRead));
+#endif
 			if (crcExpected == crcRead) {
 				startDrawingChannles();
 			} else {
@@ -462,7 +471,7 @@ static inline void handleIncomming() {
 		case SET_CHANNEL_APA102_DATA: {
 			//read in the header
 			PBAPA102DataChannel ch;
-			uartRead(&ch, sizeof(ch));
+			spiRead(&ch, sizeof(ch));
 			if (ch.frequency == 0)
 				return;
 			//make sure we're not getting more data than we can handle
@@ -484,10 +493,10 @@ static inline void handleIncomming() {
 			dst += 8;
 
 			for (int i = 0; i < ch.pixels; i++) {
-				elements[or+1] = uartGetc();
-				elements[og+1] = uartGetc();
-				elements[ob+1] = uartGetc();
-				elements[0] = uartGetc() | 0xe0;
+				elements[or+1] = spiGetc();
+				elements[og+1] = spiGetc();
+				elements[ob+1] = spiGetc();
+				elements[0] = spiGetc() | 0xe0;
 				bitConverter(dst, channel, elements, 4);
 				dst += 8;
 			}
@@ -497,9 +506,11 @@ static inline void handleIncomming() {
 			elements[1] = elements[2] = elements[3] = 0;
 			bitConverter(dst, channel, elements, 4);
 
-			volatile uint32_t crcExpected = uartGetCrc();
-			volatile uint32_t crcRead;
-			uartRead((void *) &crcRead, sizeof(crcRead));
+			volatile uint32_t crcExpected = 0, crcRead = 0;
+#if USE_CRC
+			crcExpected = spiGetCrc();
+			spiRead((void *) &crcRead, sizeof(crcRead));
+#endif
 
 			if (channel < 8) { //check that it was addressed to us (not 0xff)
 				int blocksToZero;
@@ -535,16 +546,18 @@ static inline void handleIncomming() {
 		case SET_CHANNEL_APA102_CLOCK: {
 			//read in the header
 			PBAPA102ClockChannel ch;
-			uartRead(&ch, sizeof(ch));
+			spiRead(&ch, sizeof(ch));
 			if (ch.frequency == 0)
 				return;
 
 			//check that it's addressed to us and remap
 			channel = remapFrameChannel(channel);
 
-			volatile uint32_t crcExpected = uartGetCrc();
-			volatile uint32_t crcRead;
-			uartRead((void *) &crcRead, sizeof(crcRead));
+			volatile uint32_t crcExpected = 0, crcRead = 0;
+#if USE_CRC
+			crcExpected = spiGetCrc();
+			spiRead((void *) &crcRead, sizeof(crcRead));
+#endif
 
 			if (channel < 8) { //check that it was addressed to us (not 0xff)
 				int blocksToZero;
@@ -584,7 +597,7 @@ static inline void handleIncomming() {
 }
 void loop() {
 	for (;;) {
-		if (uartAvailable() > 0) {
+		if (spiAvailable() >= 9) { //require at least 9 bytes to start processing
 			handleIncomming();
 		}
 	}

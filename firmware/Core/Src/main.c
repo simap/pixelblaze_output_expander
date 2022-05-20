@@ -281,6 +281,25 @@ static void MX_SPI1_Init(void)
   GPIO_InitStruct.Alternate = LL_GPIO_AF_5;
   LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+  /* SPI1 DMA Init */
+
+  /* SPI1_RX Init */
+  LL_DMA_SetPeriphRequest(DMA2, LL_DMA_CHANNEL_3, LL_DMA_REQUEST_4);
+
+  LL_DMA_SetDataTransferDirection(DMA2, LL_DMA_CHANNEL_3, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+
+  LL_DMA_SetChannelPriorityLevel(DMA2, LL_DMA_CHANNEL_3, LL_DMA_PRIORITY_LOW);
+
+  LL_DMA_SetMode(DMA2, LL_DMA_CHANNEL_3, LL_DMA_MODE_NORMAL);
+
+  LL_DMA_SetPeriphIncMode(DMA2, LL_DMA_CHANNEL_3, LL_DMA_PERIPH_NOINCREMENT);
+
+  LL_DMA_SetMemoryIncMode(DMA2, LL_DMA_CHANNEL_3, LL_DMA_MEMORY_INCREMENT);
+
+  LL_DMA_SetPeriphSize(DMA2, LL_DMA_CHANNEL_3, LL_DMA_PDATAALIGN_BYTE);
+
+  LL_DMA_SetMemorySize(DMA2, LL_DMA_CHANNEL_3, LL_DMA_MDATAALIGN_BYTE);
+
   /* USER CODE BEGIN SPI1_Init 1 */
 
   /* USER CODE END SPI1_Init 1 */
@@ -689,6 +708,7 @@ static void MX_DMA_Init(void)
   /* Init with LL driver */
   /* DMA controller clock enable */
   LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_DMA1);
+  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_DMA2);
 
   /* DMA interrupt init */
   /* DMA1_Channel2_IRQn interrupt configuration */
@@ -706,6 +726,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Channel7_IRQn interrupt configuration */
   NVIC_SetPriority(DMA1_Channel7_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
   NVIC_EnableIRQ(DMA1_Channel7_IRQn);
+  /* DMA2_Channel3_IRQn interrupt configuration */
+  NVIC_SetPriority(DMA2_Channel3_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
+  NVIC_EnableIRQ(DMA2_Channel3_IRQn);
 
 }
 

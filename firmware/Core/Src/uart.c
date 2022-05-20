@@ -5,6 +5,7 @@ uint8_t uartBuffer[UART_BUF_SIZE];
 int uartPos = 0;
 unsigned long uartErrors;
 
+uint8_t uartGetc();
 
 void uartSetup() {
 
