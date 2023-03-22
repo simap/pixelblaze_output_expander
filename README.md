@@ -1,3 +1,8 @@
+# USE THE APPROPRIATE BRANCH FOR YOUR HARDWARE VERSION!
+
+v2.x: https://github.com/simap/pixelblaze_output_expander/tree/v2.x
+v3.x: https://github.com/simap/pixelblaze_output_expander/tree/v3.x
+
 Pixelblaze Output Expander Board
 -------------------
 
