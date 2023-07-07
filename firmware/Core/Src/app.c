@@ -223,7 +223,8 @@ static inline void startDrawingChannles() {
 			break;
 		case SET_CHANNEL_APA102_DATA:
 			if (channels[ch].apa102DataChannel.frequency) {
-				int chBytes = channels[ch].apa102DataChannel.pixels * 4;
+				//4 bytes per pixel, plus 4 for the start frame and 4 for the end frame
+				int chBytes = channels[ch].apa102DataChannel.pixels * 4 + 8;
 				if (chBytes > maxBytes)
 					maxBytes = chBytes;
 				if (frequency == -1 || channels[ch].apa102DataChannel.frequency < frequency)
