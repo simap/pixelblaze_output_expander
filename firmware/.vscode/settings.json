@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "app.h": "c",
+        "array": "cpp",
+        "__config": "cpp",
+        "stdint.h": "c"
+    }
+}

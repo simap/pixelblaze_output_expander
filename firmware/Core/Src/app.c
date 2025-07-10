@@ -2,6 +2,8 @@
 #include "app.h"
 #include <string.h>
 
+#include "gamma.h"
+
 /*
  * Pixelblaze Output Expander
  *
@@ -89,7 +91,7 @@
  */
 
 enum RecordType {
-	SET_CHANNEL_WS2812 = 1, DRAW_ALL, SET_CHANNEL_APA102_DATA, SET_CHANNEL_APA102_CLOCK
+	SET_CHANNEL_WS2812 = 1, DRAW_ALL, SET_CHANNEL_APA102_DATA, SET_CHANNEL_APA102_CLOCK, SET_CHANNEL_APA102_FAST_DATA
 };
 
 typedef struct {
@@ -108,6 +110,13 @@ typedef struct {
 	uint32_t frequency;
 } PBAPA102ClockChannel;
 
+typedef struct {
+	uint32_t frequency;
+	uint8_t or :2, og :2, ob :2; //color orders, data on the line assumed to be RGBV (global brightness last)
+	uint8_t gammaTenths; //gamma correction in tenths e.g. 10 = 1.0. valid range 10-25
+	uint16_t pixels;
+} PBAPA102FastDataChannel;
+
 
 typedef struct {
 	enum RecordType type;
@@ -115,10 +124,22 @@ typedef struct {
 		PBWS2812Channel ws2812Channel;
 		PBAPA102DataChannel apa102DataChannel;
 		PBAPA102ClockChannel apa102ClockChannel;
+		PBAPA102FastDataChannel apa102FastDataChannel;
 	};
 } PBChannel;
 
 PBChannel channels[8];
+
+#define hdrAjust(pow) ((255 * 31) / pow)
+
+static const uint16_t hdrAdjustTable_data[] = {
+        0, hdrAjust(1), hdrAjust(2), hdrAjust(3), hdrAjust(4), hdrAjust(5),
+        hdrAjust(6), hdrAjust(7), hdrAjust(8), hdrAjust(9), hdrAjust(10), hdrAjust(11),
+        hdrAjust(12), hdrAjust(13), hdrAjust(14), hdrAjust(15), hdrAjust(16),
+        hdrAjust(17), hdrAjust(18), hdrAjust(19), hdrAjust(20), hdrAjust(21),
+        hdrAjust(22), hdrAjust(23), hdrAjust(24), hdrAjust(25), hdrAjust(26),
+        hdrAjust(27), hdrAjust(28), hdrAjust(29), hdrAjust(30), hdrAjust(31),
+};
 
 
 volatile unsigned long ms;
@@ -231,6 +252,17 @@ static inline void startDrawingChannles() {
 					frequency = channels[ch].apa102DataChannel.frequency;
 			}
 			break;
+		case SET_CHANNEL_APA102_FAST_DATA:
+			if (channels[ch].apa102FastDataChannel.frequency) {
+				//4 bytes per pixel, plus 4 for the start frame and 4 for the end frame
+				int chBytes = channels[ch].apa102FastDataChannel.pixels * 4 + 8;
+				if (chBytes > maxBytes)
+					maxBytes = chBytes;
+				if (frequency == -1 || channels[ch].apa102FastDataChannel.frequency < frequency)
+					frequency = channels[ch].apa102FastDataChannel.frequency;
+			}
+			break;
+
 		case SET_CHANNEL_APA102_CLOCK:
 			if (channels[ch].apa102ClockChannel.frequency) {
 				apa102ClockBits |= 1<<ch;
@@ -573,6 +605,88 @@ static inline void handleIncomming() {
 					bitSetZeros(bitBuffer + (BYTES_PER_CHANNEL - blocksToZero)*2, channel, blocksToZero);
 			}
 			break;
+		}
+		case SET_CHANNEL_APA102_FAST_DATA: {
+			//read in the header
+			PBAPA102FastDataChannel ch;
+			uartRead(&ch, sizeof(ch));
+			if (ch.frequency == 0)
+				return;
+			
+			//check that it's addressed to us and remap
+			channel = remapFrameChannel(channel);
+
+			uint8_t or = ch.or;
+			uint8_t og = ch.og;
+			uint8_t ob = ch.ob;
+
+			uint8_t elements[4] = {0,0,0,0};
+			uint32_t * dst = bitBuffer;
+
+			if (ch.gammaTenths < 10 || ch.gammaTenths > 25)
+				return;
+			
+			const uint16_t * gammaTable = gammaTables[ch.gammaTenths - 10];
+
+			for (int i = 0; i < ch.pixels; i++) {
+				//convert a 16 bit RGB value to 8 bit RGB
+				uint16_t rgb565 = uartGetc();
+				rgb565 |= (uartGetc() << 8);
+
+				uint16_t r = (((rgb565 >> 11) & 0x1f) * 269544) >> 15; // 0-31 -> 0-255
+				uint16_t g = (((rgb565 >> 5) & 0x3f) * 132633) >> 15; // 0-63 -> 0-255
+				uint16_t b = ((rgb565 & 0x1f) * 269544) >> 15; // 0-31 -> 0-255
+
+				// Apply gamma correction
+				r = gammaTable[r];
+				g = gammaTable[g];
+				b = gammaTable[b];
+
+				//calculate global brightness
+				uint16_t max = r > g ? (r > b ? r : b) : (g > b ? g : b);
+				uint16_t gb = (((uint32_t)max * 31) + 0xffff) >> 16; //ceiling global brightness 
+				uint32_t adj = hdrAdjustTable_data[gb];
+
+				elements[or+1] = (r * adj) >> 16;
+				elements[og+1] = (g * adj) >> 16;
+				elements[ob+1] = (b * adj) >> 16;
+				elements[0] = gb | 0xe0;
+				bitConverter(dst, channel, elements, 4);
+				dst += 8;
+			}
+
+			volatile uint32_t crcExpected = uartGetCrc();
+			volatile uint32_t crcRead;
+			uartRead((void *) &crcRead, sizeof(crcRead));
+
+			if (channel < 8) { //check that it was addressed to us (not 0xff)
+				int blocksToZero;
+				if (crcExpected == crcRead) {
+					if (channels[channel].type == SET_CHANNEL_APA102_FAST_DATA
+							&& (ch.pixels >= channels[channel].apa102FastDataChannel.pixels)
+						) {
+						blocksToZero = 0;
+					} else {
+						//we need to zero out previous data if the data received was less than last time
+						blocksToZero = BYTES_PER_CHANNEL - ch.pixels * 4;
+					}
+
+					channels[channel].type = SET_CHANNEL_APA102_FAST_DATA;
+					channels[channel].apa102FastDataChannel = ch;
+
+					lastValidChannelMs = ms;
+				} else {
+					//garbage data, disable the channel, zero everything.
+					//its better to let the LEDs keep the previous values than draw garbage.
+					debugStats.crcErrors++;
+					channels[channel].type = SET_CHANNEL_APA102_FAST_DATA;
+					memset(&channels[channel].apa102FastDataChannel, 0, sizeof(channels[0].apa102FastDataChannel));
+					blocksToZero = BYTES_PER_CHANNEL;
+				}
+				//zero out any remaining data in the buffer for this channel
+				if (blocksToZero > 0)
+					bitSetZeros(bitBuffer + (BYTES_PER_CHANNEL - blocksToZero)*2, channel, blocksToZero);
+			}
 		}
 		default:
 			//unsupported frame type or garbage frame, just wait for the next one
