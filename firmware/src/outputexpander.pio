@@ -1,0 +1,97 @@
+; Output programs. One state machine per channel.
+
+; WS2812 at 800 kHz with 20 state machine cycles per bit, so the state
+; machine clock is 16 MHz. A 0 bit is high for 6 cycles (375 ns), a 1 bit
+; for 12 (750 ns). The pin idles low while the state machine waits for data.
+.program ws2812
+.side_set 1
+.define public T1 6
+.define public T2 6
+.define public T3 8
+.wrap_target
+bitloop:
+    out x, 1       side 0 [T3 - 1]
+    jmp !x do_zero side 1 [T1 - 1]
+do_one:
+    jmp  bitloop   side 1 [T2 - 1]
+do_zero:
+    nop            side 0 [T2 - 1]
+.wrap
+
+; APA102 data. Two cycles per bit. The data pin changes on cycle 0 of each
+; bit and the clock program raises its pin on cycle 1, so both run from the
+; same divider and start together.
+.program apa102_data
+.wrap_target
+    out pins, 1 [1]
+.wrap
+
+; APA102 clock. x holds the bit count minus 1, loaded before enable. After
+; the count the pin stays low until the next draw restarts the program.
+.program apa102_clk
+.side_set 1
+loop:
+    nop            side 0
+    jmp x-- loop   side 1
+done:
+    jmp done       side 0
+
+; SPI receiver, no select line. IN base is the data pin, the clock is IN pin
+; 2 and the JMP pin. OSR holds the idle timeout in 2 cycle loop iterations,
+; loaded before enable and never shifted. Each bit waits for the clock to go
+; low, then polls for the rising edge. If the poll times out the shift
+; register and bit count are cleared, which realigns a byte boundary after
+; a lost or extra clock edge and is a no op at a real byte boundary.
+; Mode 0: data sampled on the rising edge. Autopush at 8 bits.
+.program spi_rx
+.wrap_target
+    mov isr, null
+bit:
+    wait 0 pin 2
+    mov y, osr
+idle:
+    jmp pin sample
+    jmp y-- idle
+.wrap
+sample:
+    in pins, 1
+    jmp bit
+
+; Same with data sampled on the falling edge, for mode 1 senders.
+.program spi_rx_cpha1
+.wrap_target
+    mov isr, null
+bit:
+    wait 1 pin 2
+    mov y, osr
+idle:
+    jmp pin tick
+    jmp sample
+tick:
+    jmp y-- idle
+.wrap
+sample:
+    in pins, 1
+    jmp bit
+
+; SPI transmitter for the loopback test hook. Mode 0, 4 cycles per bit,
+; data on the OUT pin, clock on side-set. x holds the total bit count minus
+; 1, loaded before enable, so a test can leave a partial byte on the wire.
+; After the count the clock holds low.
+.program spi_tx
+.side_set 1
+loop:
+    out pins, 1     side 0 [1]
+    jmp x-- loop    side 1 [1]
+public done:
+    jmp done        side 0
+
+; UART transmitter for the loopback test hook, 8N1, 8 cycles per bit.
+; From pico-examples pio/uart_tx.
+.program uart_tx
+.side_set 1 opt
+    pull       side 1 [7]
+    set x, 7   side 0 [7]
+bitloop:
+    out pins, 1
+    jmp x-- bitloop   [6]
