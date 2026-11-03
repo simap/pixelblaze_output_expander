@@ -67,6 +67,16 @@ bool output_busy(void) {
     return false;
 }
 
+void output_abort(void) {
+    for (int ch = 0; ch < PBX_CHANNELS; ch++) {
+        dma_channel_abort(outDma[ch]);
+        pio_sm_set_enabled(ch_pio(ch), ch_sm(ch), false);
+    }
+    busy = false;
+    activeMask = 0;
+    clockMask = 0;
+}
+
 static void start_dma(int ch, const ch_buffer_t *buf) {
     PIO pio = ch_pio(ch);
     uint sm = ch_sm(ch);

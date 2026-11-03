@@ -5,7 +5,13 @@
 
 channel_t channels[PBX_CHANNELS];
 
-static ch_buffer_t pool[PBX_POOL_SIZE];
+// The pool overlays the update region. See channels_update_region.
+static union {
+    ch_buffer_t pool[PBX_POOL_SIZE];
+    uint8_t update[PBX_UPDATE_REGION_BYTES];
+} region __attribute__((aligned(4)));
+_Static_assert(sizeof(region.pool) <= PBX_UPDATE_REGION_BYTES, "update region smaller than the pool");
+#define pool region.pool
 static ch_buffer_t *freeList[PBX_POOL_SIZE];
 static int freeCount;
 static ch_buffer_t *rx;
@@ -183,6 +189,15 @@ void channels_end(uint8_t ch, bool valid) {
         give(c->candidate);
     c->candidate = rx;
     rx = take();
+}
+
+uint32_t *channels_receive_target(void) {
+    return rx->data;
+}
+
+uint8_t *channels_update_region(uint32_t *size) {
+    *size = sizeof(region.update);
+    return region.update;
 }
 
 void channels_commit(void) {

@@ -44,6 +44,11 @@
 #define PBX_APA102_MIN_HZ 10000
 #define PBX_APA102_MAX_HZ 20000000
 
+// Update payload region, overlaid on the pixel buffer pool. One flash slot,
+// which is the most a payload can be. Page aligned, so a payload that fits
+// also fits with its page padding.
+#define PBX_UPDATE_REGION_BYTES (384 * 1024)
+
 // LED PWM levels out of 0xffff, same as the v3 expander.
 #define PBX_STATUS_LED_BRIGHTNESS (0x7ff / 4)
 #define PBX_DRAW_LED_BRIGHTNESS (0x3ff / 4)
@@ -96,9 +101,41 @@ typedef struct {
     uint32_t lastDataMs;
     uint32_t lastValidChannelMs;
     uint32_t lastDrawMs;
+    // Update fields are appended so the loopback test's layout stays valid.
+    uint16_t updateOther;     // update records for other keys, CRC checked
+    uint8_t updateState;      // enum pbx_update_state
+    uint8_t updateRefused;    // enum pbx_update_refused, last refusal of a matching key
+    uint32_t updateBytes;     // payload bytes received so far
+    uint8_t bootType;         // bootrom BOOT_TYPE_ of this boot
+    int8_t bootPartition;     // partition booted, -1 when none
+    uint8_t activation;       // enum pbx_activation
+    int32_t buyResult;        // rom_explicit_buy return, 0 before it runs
 } stats_t;
 
 extern volatile stats_t stats;
+
+enum pbx_update_state {
+    PBX_UPDATE_IDLE = 0,
+    PBX_UPDATE_RECEIVING,
+    PBX_UPDATE_FLASHING,
+};
+
+// Why an update with a matching key was refused before the point of no
+// return. Everything past that point ends in a reboot.
+enum pbx_update_refused {
+    PBX_REFUSED_NONE = 0,
+    PBX_REFUSED_NO_SLOT,      // not running from an A/B partition pair
+    PBX_REFUSED_TOO_BIG,      // larger than the update region or the slot
+    PBX_REFUSED_UNBOUGHT,     // arrived before the buy, which it triggered instead
+};
+
+// TBYB buy state of this boot.
+enum pbx_activation {
+    PBX_ACTIVATION_NONE = 0,  // no buy pending, nothing to do
+    PBX_ACTIVATION_PENDING,   // waits for the first frame with a good CRC
+    PBX_ACTIVATION_DONE,      // bought
+    PBX_ACTIVATION_FAILED,    // buy returned an error, see buyResult
+};
 
 // Hooks the device or the host test provides.
 
@@ -110,5 +147,25 @@ uint32_t port_copy_crc(const ring_t *ring, uint32_t start, uint32_t len, uint8_t
 void port_draw_all(void);
 uint8_t port_bus_id(void);
 uint32_t port_millis(void);
+
+// The one update key this build accepts, from the board header.
+const char *port_update_key(void);
+
+// Called once per frame whose CRC the parser checked and found good, after
+// the frame has been acted on.
+void port_frame_valid(void);
+
+// Point of no return for an update record whose key and header CRC
+// matched. Returns the RAM region the payload streams into, or NULL if the
+// update is refused, in which case the body is CRC checked and discarded.
+// After a non NULL return the LED output is stopped and the only exits are
+// port_update_apply and port_update_abort. On the device neither returns.
+uint8_t *port_update_begin(uint32_t len);
+
+// The payload is complete and its frame CRC passed.
+void port_update_apply(uint8_t *payload, uint32_t len);
+
+// The frame CRC failed or the input stopped before the payload was complete.
+void port_update_abort(void);
 
 #endif

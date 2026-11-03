@@ -2,11 +2,19 @@
 // header, then streams the payload in chunks through the port hook, which
 // copies and runs the CRC, into the channel being built. The CRC bytes at
 // the end decide whether the frame becomes a draw candidate.
+//
+// An update record for this board's key is the point of no return. Its body
+// streams into the update region, which overlays the pixel buffers, and the
+// frame ends in port_update_apply. An update for another key is consumed
+// through the bounce buffer with its CRC checked, so it counts as a valid
+// frame for activation, and can be many MB.
 
 #include <string.h>
+#include <stddef.h>
 #include "parser.h"
 #include "protocol.h"
 #include "channels.h"
+#include "crc32.h"
 
 volatile stats_t stats;
 
@@ -24,6 +32,8 @@ void parser_init(parser_t *p, ring_t *ring) {
 }
 
 void parser_reset(parser_t *p) {
+    if (p->inBody && p->body == BODY_UPDATE)
+        port_update_abort();
     p->inBody = false;
 }
 
@@ -55,6 +65,10 @@ static bool record_sizes(uint8_t type, uint32_t *hdrLen, uint8_t *bpp) {
     case PB_SET_CHANNEL_APA102_FAST_DATA:
         *hdrLen = sizeof(pb_apa102_fast_data_channel_t);
         *bpp = 2;
+        return true;
+    case PB_UPDATE:
+        *hdrLen = sizeof(pb_update_t);
+        *bpp = 1;
         return true;
     default:
         return false;
@@ -99,9 +113,23 @@ static int32_t payload_len(uint8_t type, const uint8_t *hdr) {
             return -1;
         return (uint32_t) h->pixels * 2;
     }
+    case PB_UPDATE: {
+        const pb_update_t *h = (const void *) hdr;
+        // The header CRC guards against a magic sequence inside pixel data
+        // or an update payload committing the parser to a fake body.
+        if (crc32_buf(hdr, offsetof(pb_update_t, crc)) != h->crc)
+            return -1;
+        if (h->length > PB_UPDATE_MAX_LEN)
+            return -1;
+        return h->length;
+    }
     default:
         return -1;
     }
+}
+
+static bool key_matches(const pb_update_t *h, const char *key) {
+    return strncmp(h->key, key, PB_UPDATE_KEY_LEN) == 0;
 }
 
 // Hunt for a frame start and validate its header. Returns true when the
@@ -150,11 +178,27 @@ static bool start_frame(parser_t *p) {
         stats.lastDataMs = port_millis();
 
         uint32_t hdrTotal = PB_FRAME_HEADER_LEN + hdrLen;
-        p->mine = type == PB_DRAW_ALL || (channel >> 3) == port_bus_id();
-        if (p->mine) {
+        if (type == PB_UPDATE) {
+            const pb_update_t *u = (const void *) hdr;
+            p->payload = NULL;
+            if (key_matches(u, port_update_key()))
+                p->payload = port_update_begin(u->length);
+            if (p->payload) {
+                p->body = BODY_UPDATE;
+                p->payloadLen = u->length;
+                stats.updateState = PBX_UPDATE_RECEIVING;
+                stats.updateBytes = 0;
+            } else {
+                p->body = BODY_CRC_ONLY;
+                stats.updateOther++;
+            }
+            p->crc = port_copy_crc(r, r->rd, hdrTotal, bounce, true);
+        } else if (type == PB_DRAW_ALL || (channel >> 3) == port_bus_id()) {
+            p->body = BODY_PIXELS;
             p->crc = port_copy_crc(r, r->rd, hdrTotal, bounce, true);
             channels_begin(type, hdr);
         } else {
+            p->body = BODY_SKIP;
             stats.otherBoard++;
         }
         ring_skip(r, hdrTotal);
@@ -167,6 +211,61 @@ static bool start_frame(parser_t *p) {
     }
 }
 
+// Consume a chunk of body. Returns false when nothing could be consumed.
+static bool body_chunk(parser_t *p, uint32_t avail) {
+    ring_t *r = p->ring;
+    uint32_t n = avail < p->remaining ? avail : p->remaining;
+    if (p->body == BODY_UPDATE) {
+        if (n == 0)
+            return false;
+        uint32_t done = p->payloadLen - p->remaining;
+        p->crc = port_copy_crc(r, r->rd, n, p->payload + done, false);
+        stats.updateBytes = done + n;
+    } else {
+        if (n > BOUNCE_LEN)
+            n = BOUNCE_LEN;
+        n -= n % p->bpp;
+        if (n == 0)
+            return false;
+        if (p->body == BODY_PIXELS) {
+            p->crc = port_copy_crc(r, r->rd, n, bounce, false);
+            channels_pixels(bounce, n / p->bpp);
+        } else if (p->body == BODY_CRC_ONLY) {
+            p->crc = port_copy_crc(r, r->rd, n, bounce, false);
+        }
+    }
+    ring_skip(r, n);
+    p->remaining -= n;
+    return true;
+}
+
+static void end_frame(parser_t *p, uint32_t crcRead) {
+    if (p->body == BODY_SKIP)
+        return;
+    if (p->crc != crcRead) {
+        stats.crcErrors++;
+        if (p->body == BODY_UPDATE)
+            port_update_abort();
+        return;
+    }
+    switch (p->body) {
+    case BODY_PIXELS:
+        if (p->type == PB_DRAW_ALL) {
+            port_draw_all();
+        } else {
+            channels_end(p->channel, true);
+            stats.lastValidChannelMs = port_millis();
+        }
+        break;
+    case BODY_UPDATE:
+        port_update_apply(p->payload, p->payloadLen);
+        break;
+    default:
+        break;
+    }
+    port_frame_valid();
+}
+
 void parser_poll(parser_t *p) {
     ring_t *r = p->ring;
     for (;;) {
@@ -174,7 +273,7 @@ void parser_poll(parser_t *p) {
         if (avail > r->mask - RING_OVERRUN_MARGIN) {
             stats.rxOverruns++;
             r->rd = r->wr;
-            p->inBody = false;
+            parser_reset(p);
             return;
         }
 
@@ -185,18 +284,8 @@ void parser_poll(parser_t *p) {
         }
 
         if (p->remaining) {
-            uint32_t n = avail < p->remaining ? avail : p->remaining;
-            if (n > BOUNCE_LEN)
-                n = BOUNCE_LEN;
-            n -= n % p->bpp;
-            if (n == 0)
+            if (!body_chunk(p, avail))
                 return;
-            if (p->mine) {
-                p->crc = port_copy_crc(r, r->rd, n, bounce, false);
-                channels_pixels(bounce, n / p->bpp);
-            }
-            ring_skip(r, n);
-            p->remaining -= n;
             continue;
         }
 
@@ -206,18 +295,6 @@ void parser_poll(parser_t *p) {
         copy_peek(r, 0, &crcRead, PB_CRC_LEN);
         ring_skip(r, PB_CRC_LEN);
         p->inBody = false;
-
-        if (!p->mine)
-            continue;
-        if (p->crc != crcRead) {
-            stats.crcErrors++;
-            continue;
-        }
-        if (p->type == PB_DRAW_ALL) {
-            port_draw_all();
-        } else {
-            channels_end(p->channel, true);
-            stats.lastValidChannelMs = port_millis();
-        }
+        end_frame(p, crcRead);
     }
 }

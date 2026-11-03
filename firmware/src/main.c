@@ -5,6 +5,7 @@
 #include "output.h"
 #include "leds.h"
 #include "loopback.h"
+#include "update.h"
 
 static uint8_t busId;
 
@@ -46,8 +47,10 @@ int main() {
     output_init();
     input_init();
     loopback_init();
+    update_init();
 
     for (;;) {
+        update_feed_watchdog();
         input_poll();
         output_busy();
         leds_poll();

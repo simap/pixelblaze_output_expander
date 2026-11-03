@@ -22,6 +22,7 @@ enum pb_record_type {
     PB_SET_CHANNEL_APA102_DATA = 3,
     PB_SET_CHANNEL_APA102_CLOCK = 4,
     PB_SET_CHANNEL_APA102_FAST_DATA = 5,
+    PB_UPDATE = 6,
 };
 
 // Colour order byte. Two bits per element give the output position of each
@@ -59,7 +60,22 @@ typedef struct __attribute__((packed)) {
 // frames, or 5336 RGB WS2812 pixels. The v3 expander allowed 4808.
 #define PB_MAX_BYTES_PER_CHANNEL 16008
 
-#define PB_MAX_RECORD_HEADER_LEN 8
+// Update record. Broadcast, the channel byte is ignored. The key names the
+// hardware and payload type, for example "RP2350_ARM-2MB-standard-firmware",
+// NUL padded and compared up to the first NUL. A board accepts only the keys
+// it was built with. crc is the CRC32 of key and length, checked before the
+// parser commits to a body it cannot rewind. The payload is a sealed
+// firmware image as flashed, and the frame CRC follows it as usual.
+#define PB_UPDATE_KEY_LEN 64
+#define PB_UPDATE_MAX_LEN (8u << 20)
+
+typedef struct __attribute__((packed)) {
+    char key[PB_UPDATE_KEY_LEN];
+    uint32_t length;
+    uint32_t crc;
+} pb_update_t;
+
+#define PB_MAX_RECORD_HEADER_LEN sizeof(pb_update_t)
 #define PB_MAX_FRAME_LEN (PB_FRAME_HEADER_LEN + PB_MAX_RECORD_HEADER_LEN + PB_MAX_BYTES_PER_CHANNEL + PB_CRC_LEN)
 
 #endif

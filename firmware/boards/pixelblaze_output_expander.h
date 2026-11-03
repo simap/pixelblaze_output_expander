@@ -11,6 +11,20 @@ pico_board_cmake_set(PICO_PLATFORM, rp2350)
 
 #define PICO_RP2350A 1
 
+// The one update key this build accepts, compared as an opaque string. It
+// names chip and architecture, flash class, pin layout, and payload type.
+// A board variant with other pins gets its own header and key.
+#define PBX_UPDATE_KEY "RP2350_ARM-2MB-standard-firmware"
+
+// Flash layout, the same as pt.json and flash_ab.sh. Sector 0 holds the
+// partition table. Slot B is linked to slot A as its B partition. The
+// bootrom numbers partitions in table order.
+#define PBX_SLOT_A 0
+#define PBX_SLOT_B 1
+#define PBX_SLOT_A_OFFSET 0x1000
+#define PBX_SLOT_B_OFFSET 0x61000
+#define PBX_SLOT_SIZE (384 * 1024)
+
 // LED data outputs, one per channel, consecutive for PIO out/side-set.
 // Channel numbering is reversed: GP0 is channel 7, GP7 is channel 0.
 #define PBX_LED_OUT_PIN_BASE 0

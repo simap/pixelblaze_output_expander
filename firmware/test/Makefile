@@ -2,7 +2,7 @@
 
 CC ?= cc
 CFLAGS = -std=c11 -Wall -Wextra -O1 -I../src
-SRCS = host_test.c ../src/parser.c ../src/channels.c ../src/crc32.c
+SRCS = host_test.c ../src/parser.c ../src/channels.c ../src/crc32.c ../src/imagedef.c
 
 host_test: $(SRCS) ../src/*.h
 	$(CC) $(CFLAGS) $(SRCS) -lm -o $@

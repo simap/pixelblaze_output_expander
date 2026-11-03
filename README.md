@@ -58,10 +58,24 @@ In total:
 PBFrameHeader + CRC
 ```
 
+### `UPDATE` (v4 boards)
+
+Record type 6 carries an update payload for the RP2354 based v4 boards. It is broadcast, so the channel byte is ignored. The frame header is followed by this header, then the payload, then the usual frame CRC:
+
+```c
+typedef struct {
+	char key[64];     // hardware and payload type, NUL padded, e.g. "RP2350_ARM-2MB-standard-firmware"
+	uint32_t length;  // payload bytes
+	uint32_t crc;     // CRC32 of just key and length
+} PBUpdate;
+```
+
+A board accepts the record only if the key is the one it was built with, so updates for other boards on the same bus are consumed and ignored. A failed CRC reboots back into the running firmware.
+
 Error Handling
 -------------------
 
-The firmware is designed to tolerate noise and data errors. There isn't enough memory to double-buffer the channel data, but any channel data received is zeroed out in case the CRC does not match.
+The firmware is designed to tolerate noise and data errors. Channel data is double-buffered and pre-checked, so any CRC mismatch keeps the last value frame, and frames received do not overwrite a draw in progress.
 
 The magic header provides a way to align frames in case of continuous transmission.
 

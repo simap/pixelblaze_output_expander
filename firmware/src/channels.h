@@ -66,4 +66,13 @@ void channels_end(uint8_t ch, bool valid);
 // Commit every candidate. Called at the start of a draw.
 void channels_commit(void);
 
+// The receive target's pixel words, PBX_MAX_WORDS of them. Empty between
+// frames and until the next body chunk, so free for scratch use then.
+uint32_t *channels_receive_target(void);
+
+// The pool's memory as one region for an update payload. Using it destroys
+// every channel buffer, so the caller stops output first and ends in a
+// reboot. Returns the region and stores its size.
+uint8_t *channels_update_region(uint32_t *size);
+
 #endif

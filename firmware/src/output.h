@@ -13,4 +13,8 @@ bool output_busy(void);
 // latch window.
 void output_draw(void);
 
+// Stops every channel mid frame. The LEDs hold what they got. Used when
+// the draw buffers are about to be reused for an update payload.
+void output_abort(void);
+
 #endif
