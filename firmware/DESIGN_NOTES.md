@@ -9,6 +9,16 @@ Notes from 2026-11-02. Branch v4.x, new hardware.
 - Raise the input data rate to about 4 Mbaud or more, with auto baud detect.
 - Support SPI input.
 
+Round 2 ideas:
+- Push firmware upgrades.
+- Add LED types: WS2816, HD108/NS108, UCS5603, UCS7604
+- USB (CDC, custom device, or display, MSC for config?)
+- Could push color correction/gamma to board.
+- Could push power limit to board/channel. 
+- Temporal dithering mode for 8 bit LEDs when channel pixel count supports it.
+- Low data FPS keyframe interpolation.
+- Jumperless board address assining protocol maybe. Would have to rely on eyeballs. hash(serial + try) until they show different patterns, then assign address.
+
 ## Board pins
 
 | Function | GPIO |
@@ -39,6 +49,23 @@ Wiring, bus layout, and fanout will set the practical speed. CRC32 catches the s
 ## Bit conversion
 
 Bit conversion for the parallel output was the CPU bottleneck on the STM32 board. At 80 MHz it measured around 4.5 Mbaud worth of conversion. It can be split across cores if needed. Cortex-M33 instructions or the way PIO works may get around it. Otherwise one 150 MHz core dedicated to conversion would top out around 6.75 Mbps of SPI input.
+
+## Firmware update
+
+- Firmware is tiny, could buffer entirely in RAM.
+- Update frame covers whole image.
+- Use A/B slots.
+- Match key on hardware (in image flash). Ignore firmware for other hardware.
+- Variants self-selct, no need for OTP.
+- Reboot on upgrade failure, back to working LEDs.
+- Frame has CRC32, firmare image can have sha256.
+- Update is exact version, so a downgrade or older version of PB could downgrade the board. Only skip same-version + same sha256, so a limping board could repair. Plus keeps local dev sane without incrementing versions every build.
+- If there is a reason to refuse downgrade, the newer board firmware could decide, but would have to satisfy old protocol requirements.
+- Broadcast to all boards, since it still keys on hardware key. No reason to update just one by address.
+- Use the SDK's TBYB to protect against a buggy firmware update, and makes downgrade easier. The rom_explicit_buy() call automatically invalidates the other image if it is a downgrade, so bootrom uses the downgrade instead of the newest version.
+- Upgrade frame has an extra CRC protecting the header so that accidental magic + arbitrary image size do not lock up a desynced reader for too long. Plus cap firmware images to 4MB.
+- Update hardware key has the chip+architecture (RP2350_ARM), flash class requirement (2MB), pin layout (standard), and payload type (firmware). e.g. `RP2350_ARM-2MB-standard-firmware` is 32 bytes, so 64B would give plenty of headroom and is rare enough that wasted padding isn't important. Future schemes can use this for more nuance.
+
 
 ## Reference facts
 
