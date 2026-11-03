@@ -5,9 +5,8 @@
 //
 // APA102 clock and data channels share one clock divider and the two
 // programs are two cycles per bit, so a clock channel started with its data
-// channels stays in lockstep. Across the two PIO blocks the enables are a
-// few system clocks apart, which is a small fraction of a bit at the rates
-// in use.
+// channels stays in lockstep. Both PIO blocks are enabled by one CTRL write
+// so all eight state machines start on the same system clock.
 
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
@@ -199,8 +198,7 @@ void output_draw(void) {
     busy = true;
     stats.drawCount++;
     stats.lastDrawMs = port_millis();
-    if (enableMask[0])
-        pio_enable_sm_mask_in_sync(pios[0], enableMask[0]);
-    if (enableMask[1])
-        pio_enable_sm_mask_in_sync(pios[1], enableMask[1]);
+    // One CTRL write to PIO0 enables and restarts the dividers of its own
+    // state machines and, through NEXT_PIO_MASK, PIO1's on the same cycle.
+    pio_enable_sm_multi_mask_in_sync(pios[0], 0, enableMask[0], enableMask[1]);
 }

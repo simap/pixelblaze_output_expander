@@ -91,5 +91,6 @@ Output bandwidth:
 
 Input bandwidth:
 * UART 2 Mbaud, 10 bits per byte = 1.6 Mbps payload (v1-3 expanders).
+* 5Mbaud gets 4 Mbps. 
 * 12.5MHz SPI is 7.8X, about 2 saturated boards.
-* PIO SPI at 30 MHz is 4 to 5 saturated boards.
+* PIO SPI at 20 MHz is just over 3 saturated boards.
