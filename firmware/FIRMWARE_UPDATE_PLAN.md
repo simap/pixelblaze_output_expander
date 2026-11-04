@@ -16,13 +16,13 @@ Design background is in DESIGN_NOTES.md, Firmware update section.
 - Erase and program from the RAM buffer with interrupts off. No pacing needed because the frame has already ended.
 - Activation always goes through a flash update boot, which runs the written slot once. On its first frame with a good CRC the new image buys itself if the boot has a buy pending. An update record for this board arriving unbought buys at its header and is then refused, so an unbought image never overwrites its fallback. The header CRC is proof enough that the input works, and the buy laps the ring so the rest of that frame is lost anyway. The sender resends. The buy erases the other slot's first sector, so the bought image is preferred from then on whatever the versions (datasheet 5.1.17). A non TBYB image launched by a flash update boot gets the same erase from the bootrom at launch.
 - The bootrom launches an unbought TBYB image under its own 16.7 s watchdog. The main loop reloads it, so the buy has no time limit while the firmware runs. A hang stops the reloads and the bootrom reboots into the old slot.
-- The TBYB flag is the CMake option PBX_TBYB, off by default. A TBYB image boots only through a flash update reboot, so a plain SWD load and reset will not run it. Release builds turn it on. Development builds go in over SWD, where flash_ab.sh controls the slots directly.
+- Every build produces two images. The update image, outputexpander_update.bin, is the app firmware alone with the TBYB flag, the UPDATE payload for embedding in another microcontroller. The base image, outputexpander_base.bin and outputexpander.uf2, is the partition table plus the plain firmware, for first time programming, recovery, and manual updates. It is not TBYB because a TBYB image boots only through a flash update reboot and a plain SWD or BOOTSEL load will not run it. Development builds go in over SWD, where flash_ab.sh controls the slots directly.
 - The buy costs a stall of up to a few hundred ms with interrupts off, once per update.
 - Any validation failure before flash reboots back to the running firmware. No flash is touched.
 
 ## TODO
 
-1. Partition table JSON: one A/B pair, A at 4K and B at 388K, 384 KB each. The rest of flash is left for a future filesystem. The build packs the table, padded to 4 KB, and the sealed firmware into outputexpander_factory.bin, which is what production boards get at 0x10000000. flash_ab.sh writes it over SWD.
+1. Partition table JSON: one A/B pair, A at 4K and B at 388K, 384 KB each. The rest of flash is left for a future filesystem. The build packs the table, padded to 4 KB, and the sealed firmware into outputexpander_base.bin, which is what production boards get at 0x10000000. flash_ab.sh writes it over SWD.
 2. CMake: pico_set_binary_version with MAJOR and MINOR, pico_hash_binary, PICO_CRT0_IMAGE_TYPE_TBYB=1. Confirm the .bin from pico_add_extra_outputs is produced from the sealed ELF. Confirm picotool load still boots a TBYB image during development.
 3. Hardware key constant per board variant in the board header. Add a dev board variant that moves the input pins.
 4. Protocol: PB_FIRMWARE record type and header struct with header CRC32 in protocol.h. Pixelblaze side sender in a separate task.
@@ -39,4 +39,4 @@ Design background is in DESIGN_NOTES.md, Firmware update section.
 
 ## Status
 
-Items 1 to 11 and 13 are implemented. Item 12 has host tests for the parser and block walk. The flash and reboot path has not been run on hardware yet. flash_ab.sh writes the factory image over SWD. Item 4's Pixelblaze side sender is not started.
+Items 1 to 11 and 13 are implemented. Item 12 has host tests for the parser and block walk. The flash and reboot path has not been run on hardware yet. flash_ab.sh writes the base image over SWD. Item 4's Pixelblaze side sender is not started.

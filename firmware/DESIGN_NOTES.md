@@ -8,9 +8,10 @@ Notes from 2026-11-02. Branch v4.x, new hardware.
 - Use PIO for WS2812 and APA102 type LED output, with types mixed across channels.
 - Raise the input data rate to about 4 Mbaud or more, with auto baud detect.
 - Support SPI input.
-
-Round 2 ideas:
 - Push firmware upgrades.
+
+Future round ideas:
+- Variable WS2812 timing. Helps with some clone chipsets.
 - Add LED types: WS2816, HD108/NS108, UCS5603, UCS7604
 - USB (CDC, custom device, or display, MSC for config?)
 - Could push color correction/gamma to board.

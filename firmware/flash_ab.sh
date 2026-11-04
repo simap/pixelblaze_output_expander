@@ -1,7 +1,7 @@
 #!/bin/zsh
-# Factory flash over SWD: outputexpander_factory.bin at the start of flash,
-# which is the A/B partition table in sector 0 and the firmware in slot A.
-# Slot B's first sector is erased so the bootrom has exactly one bootable
+# Base image flash over SWD: outputexpander_base.bin at the start of flash,
+# which is the A/B partition table in sector 0, the firmware in slot A, and
+# slot B's first sector cleared so the bootrom has exactly one bootable
 # image. After this, updates over the data input alternate between the
 # slots.
 #
@@ -18,14 +18,10 @@ set -e
 BUILD=${1:-$(dirname "$0")/build}
 OCD_DIR=${PICO_SDK_OPENOCD:-$HOME/.pico-sdk/openocd/0.12.0+dev}
 
-# Slot B offset from pt.json, also in boards/pixelblaze_output_expander.h.
-SLOT_B=0x10061000
-
 "$OCD_DIR/openocd" -s "$OCD_DIR/scripts" \
     -f interface/cmsis-dap.cfg -f target/rp2350.cfg \
     -c "adapter speed 5000" \
     -c "init" \
     -c "reset halt" \
-    -c "flash erase_address $SLOT_B 0x1000" \
-    -c "program $BUILD/outputexpander_factory.bin 0x10000000 verify reset" \
+    -c "program $BUILD/outputexpander_base.bin 0x10000000 verify reset" \
     -c "shutdown"
