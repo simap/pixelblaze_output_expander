@@ -20,6 +20,22 @@
 // PIO2 state machines. PIO0 and PIO1 are the eight output channels.
 #define PBX_LOOPBACK_SM 0
 #define PBX_SPI_RX_SM 1
+#define PBX_BAUD_SM 2
+
+// Auto baud. The rate is held while valid channel frames arrive. After
+// PBX_BAUD_LOCK_MS without one, measurements are collected for
+// PBX_BAUD_WINDOW_MS and the fastest cluster with at least two samples is
+// taken, since slower clusters are data patterns that look like a 'U' at a
+// multiple of the bit period. The divider is rewritten when the result
+// differs from the current rate by more than PBX_BAUD_CHANGE_PCT, then
+// nothing changes for PBX_BAUD_HOLD_MS to let frames lock it.
+#define PBX_BAUD_LOCK_MS 200
+#define PBX_BAUD_WINDOW_MS 50
+#define PBX_BAUD_HOLD_MS 150
+#define PBX_BAUD_CHANGE_PCT 1.0f
+#define PBX_BAUD_CLUSTER_PCT 3.0f
+#define PBX_BAUD_MIN 100000
+#define PBX_BAUD_MAX 9000000
 
 // After this long with no clock edge the receiver clears any partial byte.
 // Never fires inside a byte from a hardware sender at 200 kHz or above. A
@@ -110,6 +126,12 @@ typedef struct {
     int8_t bootPartition;     // partition booted, -1 when none
     uint8_t activation;       // enum pbx_activation
     int32_t buyResult;        // rom_explicit_buy return, 0 before it runs
+    // Auto baud, appended for the same reason.
+    uint16_t baudChanges;     // UART divider rewrites from measurement
+    uint16_t baudSamples;     // valid 'U' measurements seen
+    uint32_t baudMeasured;    // last accepted rate before snapping
+    uint32_t baudRaw1;        // last valid pair: start bit iterations
+    uint32_t baudRaw2;        // last valid pair: 8 bit span iterations
 } stats_t;
 
 extern volatile stats_t stats;

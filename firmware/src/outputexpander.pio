@@ -86,6 +86,40 @@ loop:
 public done:
     jmp done        side 0
 
+; Baud measurement on the UART data input. IN base and JMP pin are both the
+; data pin. For each byte it catches it pushes two counts of 2 cycle loop
+; iterations from the start bit falling edge: the start bit width, and the
+; span to the fourth falling edge after it. For a 'U' (0x55) the span is
+; exactly 8 bits and no other byte gives span equal to 8 times the start
+; width, so software can pick the 'U' bytes out and derive the bit period
+; with 0.25 cycle resolution. Pushes are non blocking, a full FIFO drops
+; the sample.
+.program baud_measure
+.wrap_target
+    wait 1 pin 0
+    wait 0 pin 0
+    mov x, ~null
+sl:
+    jmp pin se
+    jmp x-- sl
+se:
+    mov isr, ~x
+    push noblock
+    set y, 3
+hi:
+    jmp x-- hi2
+hi2:
+    jmp pin hi
+    jmp y-- lo
+    jmp fin
+lo:
+    jmp pin hi
+    jmp x-- lo
+fin:
+    mov isr, ~x
+    push noblock
+.wrap
+
 ; UART transmitter for the loopback test hook, 8N1, 8 cycles per bit.
 ; From pico-examples pio/uart_tx.
 .program uart_tx

@@ -36,6 +36,7 @@ set(PBX_VERSION_MINOR 0)
 set(PBX_SOURCES
     src/main.c
     src/input.c
+    src/autobaud.c
     src/output.c
     src/leds.c
     src/loopback.c

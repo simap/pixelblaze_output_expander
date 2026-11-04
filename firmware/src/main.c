@@ -6,6 +6,7 @@
 #include "leds.h"
 #include "loopback.h"
 #include "update.h"
+#include "autobaud.h"
 
 static uint8_t busId;
 
@@ -46,12 +47,14 @@ int main() {
     channels_init();
     output_init();
     input_init();
+    autobaud_init();
     loopback_init();
     update_init();
 
     for (;;) {
         update_feed_watchdog();
         input_poll();
+        autobaud_poll();
         output_busy();
         leds_poll();
         loopback_poll();
